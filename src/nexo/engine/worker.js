@@ -17,10 +17,13 @@ async function getBinary() {
 }
 
 async function engine({ fen, variant, level = 2, moves, analysis = false }) {
-  const depth = analysis ? 10 : [3, 6, 10, 14][level - 1] || 6,
-    time = analysis ? 250 : [100, 250, 600, 1000][level - 1] || 250;
+  // Come-come: L1 depth 1, L2 depth 2 + low skill (beatable), L3 depth 5, L4 unchanged.
+  const cc = variant === "comecome";
+  const depth = analysis ? 10 : (cc ? [1, 2, 5, 14] : [3, 6, 10, 14])[level - 1] || 6,
+    time = analysis ? 250 : (cc ? [50, 80, 400, 1000] : [100, 250, 600, 1000])[level - 1] || 250,
+    skill = (cc ? [0, 1, 10, 20] : [0, 5, 12, 20])[level - 1] ?? 5;
   const cmds =
-    `uci\nsetoption name VariantPath value /variants.ini\nsetoption name UCI_Variant value ${variant === "comecome" ? "comecome" : "chess"}\nsetoption name Threads value 1\nsetoption name Hash value 16\nsetoption name Skill Level value ${[0, 5, 12, 20][level - 1] ?? 5}\nisready\nposition fen ${fen}\ngo depth ${depth} movetime ${time}${moves?.length ? " searchmoves " + moves.join(" ") : ""}\n`;
+    `uci\nsetoption name VariantPath value /variants.ini\nsetoption name UCI_Variant value ${cc ? "comecome" : "chess"}\nsetoption name Threads value 1\nsetoption name Hash value 16\nsetoption name Skill Level value ${skill}\nisready\nposition fen ${fen}\ngo depth ${depth} movetime ${time}${moves?.length ? " searchmoves " + moves.join(" ") : ""}\n`;
   const input = new TextEncoder().encode(cmds);
   let i = 0,
     lastScore = null,
@@ -67,8 +70,8 @@ function adaptedMove(state, hint, level) {
   if (!moves.length) return null;
   let nodes = 0,
     deadline = Infinity;
-  const maxNodes = [90, 250, 650, 1500][level - 1],
-    maxDepth = [1, 2, 3, 4][level - 1];
+  const maxNodes = [90, 250, 650, 6000][level - 1],
+    maxDepth = [1, 2, 3, 6][level - 1];
   const color = state.turn;
   function search(s, d, a, b) {
     if (d === 0 || s.result || ++nodes > maxNodes || Date.now() >= deadline)
@@ -92,7 +95,7 @@ function adaptedMove(state, hint, level) {
     choice = moves[0];
   for (const m of moves) {
     nodes = 0;
-    deadline = Date.now() + [1, 12, 25, 45][level - 1];
+    deadline = Date.now() + (level === 4 ? Math.max(40, Math.floor(1500 / moves.length)) : [1, 12, 25][level - 1]);
     const next = applyMove(state, m, true);
     const val =
       search(next, maxDepth - 1, -Infinity, Infinity) +
