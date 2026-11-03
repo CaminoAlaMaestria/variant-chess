@@ -367,7 +367,7 @@ function App() {
           signal: controller.signal,
         });
         const data = await r.json();
-        if (!r.ok) throw new Error(data.error);
+        if (!r.ok || data.error) throw new Error(data.error);
         if (id !== requestId.current) return;
         const m = legalMoves(gameRef.current).find((x) => uci(x) === data.move);
         if (!m) throw new Error("No se pudo validar la jugada.");
@@ -588,7 +588,7 @@ function App() {
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
+      if (!r.ok || data.error) throw new Error(data.error);
       if (gameRef.current.fen !== fen) return;
       const m = moves.find((m) => uci(m) === data.move);
       setHint(m);
@@ -624,7 +624,7 @@ function App() {
         body: JSON.stringify({ fen: displayFen, variant: game.variant }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error);
+      if (!r.ok || data.error) throw new Error(data.error);
       setAnalysisScore({ ...data, fen: displayFen });
     } catch (e) {
       notify(e.message);
