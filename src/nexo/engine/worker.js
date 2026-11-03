@@ -70,8 +70,8 @@ function adaptedMove(state, hint, level) {
   if (!moves.length) return null;
   let nodes = 0,
     deadline = Infinity;
-  const maxNodes = [90, 250, 650, 1500][level - 1],
-    maxDepth = [1, 2, 3, 4][level - 1];
+  const maxNodes = [90, 250, 650, 6000][level - 1],
+    maxDepth = [1, 2, 3, 6][level - 1];
   const color = state.turn;
   function search(s, d, a, b) {
     if (d === 0 || s.result || ++nodes > maxNodes || Date.now() >= deadline)
@@ -95,7 +95,7 @@ function adaptedMove(state, hint, level) {
     choice = moves[0];
   for (const m of moves) {
     nodes = 0;
-    deadline = Date.now() + [1, 12, 25, 45][level - 1];
+    deadline = Date.now() + (level === 4 ? Math.max(40, Math.floor(1500 / moves.length)) : [1, 12, 25][level - 1]);
     const next = applyMove(state, m, true);
     const val =
       search(next, maxDepth - 1, -Infinity, Infinity) +
