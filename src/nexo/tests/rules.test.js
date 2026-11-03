@@ -9,7 +9,7 @@ import {
   inCheck,
   boardFromFen,
   pgn,
-} from "../src/rules.js";
+} from "../rules.js";
 function pos(fen, variant = "comecome", extra = {}) {
   return { ...initial(variant), fen, turn: fen.split(" ")[1], ...extra };
 }

@@ -13,7 +13,7 @@ import {
   allowsReplyCheck,
   rewindDice,
   pgn,
-} from "../src/rules.js";
+} from "../rules.js";
 function pos(fen) {
   return { ...initial("azar"), fen, turn: fen.split(" ")[1] };
 }
