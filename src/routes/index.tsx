@@ -1,24 +1,46 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+const NexoGame = lazy(() => import("../nexo/Game.jsx"));
+
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "NEXO — Ajedrez, sin límites" },
+      {
+        name: "description",
+        content: "Tres variantes de ajedrez: Come-come, Correlativo y Azar, con NYX, KAIRO y VEGA.",
+      },
+      { property: "og:title", content: "NEXO — Ajedrez, sin límites" },
+      {
+        property: "og:description",
+        content: "Juega Come-come, Correlativo y Azar en un mismo tablero.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
+function Boot() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background text-center text-foreground">
+      <div>
+        <h1 className="text-3xl font-bold">NEXO.</h1>
+        <p className="mt-2 text-muted-foreground">Preparando el tablero…</p>
+      </div>
+    </div>
+  );
+}
+
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <ClientOnly fallback={<Boot />}>
+      <Suspense fallback={<Boot />}>
+        <NexoGame />
+      </Suspense>
+    </ClientOnly>
   );
 }
