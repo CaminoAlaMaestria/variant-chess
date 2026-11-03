@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiEvaluateRouteImport } from './routes/api/evaluate'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiMoveRouteImport } from './routes/api/move'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiEvaluateRoute = ApiEvaluateRouteImport.update({
+  id: '/api/evaluate',
+  path: '/api/evaluate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMoveRoute = ApiMoveRouteImport.update({
+  id: '/api/move',
+  path: '/api/move',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/evaluate': typeof ApiEvaluateRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/move': typeof ApiMoveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/evaluate': typeof ApiEvaluateRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/move': typeof ApiMoveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/evaluate': typeof ApiEvaluateRoute
+  '/api/health': typeof ApiHealthRoute
+  '/api/move': typeof ApiMoveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/api/evaluate' | '/api/health' | '/api/move'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/api/evaluate' | '/api/health' | '/api/move'
+  id: '__root__' | '/' | '/api/evaluate' | '/api/health' | '/api/move'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiEvaluateRoute: typeof ApiEvaluateRoute
+  ApiHealthRoute: typeof ApiHealthRoute
+  ApiMoveRoute: typeof ApiMoveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +78,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/evaluate': {
+      id: '/api/evaluate'
+      path: '/api/evaluate'
+      fullPath: '/api/evaluate'
+      preLoaderRoute: typeof ApiEvaluateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/move': {
+      id: '/api/move'
+      path: '/api/move'
+      fullPath: '/api/move'
+      preLoaderRoute: typeof ApiMoveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiEvaluateRoute: ApiEvaluateRoute,
+  ApiHealthRoute: ApiHealthRoute,
+  ApiMoveRoute: ApiMoveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

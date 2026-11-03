@@ -61,7 +61,6 @@ import {
   rewindDice,
   DICE_EFFECTS,
 } from "./rules.js";
-import "./style.css";
 import { browserSession, writeSession, SESSION_KEY } from "./session.js";
 const THEMES = {
   sage: { name: "Salvia", light: "#e0e4cd", dark: "#7e9780" },
