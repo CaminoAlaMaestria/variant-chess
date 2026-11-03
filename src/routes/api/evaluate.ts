@@ -6,8 +6,8 @@ export const Route = createFileRoute("/api/evaluate")({
     handlers: {
       POST: async () =>
         Response.json(
-          { error: "Motor no disponible en este alojamiento. El juego local sigue funcionando." },
-          { status: 200 },
+          { error: "El motor se ejecuta en el navegador; este punto de acceso no se usa." },
+          { status: 503 },
         ),
     },
   },

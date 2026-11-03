@@ -10,4 +10,4 @@
 <!-- LOVABLE:END -->
 
 - The NEXO game lives in src/nexo (ported verbatim, client-only via ClientOnly + lazy) — keep game rules there and ask the owner before changing any rule.
-- /api/move and /api/evaluate must return 503 until a real engine is attached — never fake Stockfish moves or scores.
+- The bot engine is real Fairy-Stockfish 14 compiled to single-threaded WebAssembly (public/wasm, glue+worker in src/nexo/engine; source patch in licenses/fairy-stockfish-wasm.patch) because the hosting cannot run native binaries; the worker mirrors the original server.js logic. Never fake moves or scores; /api/move and /api/evaluate stay 503 stubs.

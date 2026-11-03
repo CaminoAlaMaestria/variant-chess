@@ -43,3 +43,7 @@ Las versiones exactas están fijadas en `package-lock.json`. Las distribuciones 
 ## Retratos
 
 NYX, KAIRO y VEGA: imágenes generadas por IA para NEXO, no fotografías de personas reales ni recursos de Lichess.
+
+## Fairy-Stockfish WebAssembly build
+
+public/wasm/fairy-stockfish.wasm and src/nexo/engine/fairy-stockfish.js are Fairy-Stockfish 14 (GPL-3.0) compiled with Emscripten as a single-threaded build. Source: fairy-stockfish-14-source.tar.gz; modifications: fairy-stockfish-wasm.patch.

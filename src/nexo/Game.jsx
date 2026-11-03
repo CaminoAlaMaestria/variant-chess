@@ -1,4 +1,5 @@
 import "./style.css";
+import { engineMove, engineEvaluate } from "./engine/client.js";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Swords,
@@ -357,17 +358,11 @@ function App() {
           if (id === requestId.current) setGame(rollDice(game, randomFace()));
           return;
         }
-        const r = await fetch("/api/move", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            state: { ...game, history: [], positions: [] },
-            level,
-          }),
-          signal: controller.signal,
-        });
-        const data = await r.json();
-        if (!r.ok || data.error) throw new Error(data.error);
+        const data = await engineMove(
+          { ...game, history: [], positions: [] },
+          level,
+          controller.signal,
+        );
         if (id !== requestId.current) return;
         const m = legalMoves(gameRef.current).find((x) => uci(x) === data.move);
         if (!m) throw new Error("No se pudo validar la jugada.");
@@ -579,16 +574,7 @@ function App() {
     setBusy(true);
     const fen = game.fen;
     try {
-      const r = await fetch("/api/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          state: { ...game, history: [], positions: [] },
-          level: 2,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok || data.error) throw new Error(data.error);
+      const data = await engineMove({ ...game, history: [], positions: [] }, 2);
       if (gameRef.current.fen !== fen) return;
       const m = moves.find((m) => uci(m) === data.move);
       setHint(m);
@@ -618,13 +604,7 @@ function App() {
     setEvalBusy(true);
     setAnalysisScore(null);
     try {
-      const r = await fetch("/api/evaluate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fen: displayFen, variant: game.variant }),
-      });
-      const data = await r.json();
-      if (!r.ok || data.error) throw new Error(data.error);
+      const data = await engineEvaluate(displayFen, game.variant);
       setAnalysisScore({ ...data, fen: displayFen });
     } catch (e) {
       notify(e.message);
