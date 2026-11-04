@@ -167,9 +167,9 @@ button:hover:not(:disabled) {
   align-items: center;
   gap: 11px;
   font-family: "Manrope", sans-serif;
-  font-size: 30px;
+  font-size: 19px;
   font-weight: 800;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   margin: 0 12px;
 }
 .brand-icon {
@@ -2130,7 +2130,7 @@ select:disabled {
     width: calc(100% - 190px);
   }
   .brand {
-    font-size: 27px;
+    font-size: 17px;
     margin-left: 10px;
     gap: 8px;
   }

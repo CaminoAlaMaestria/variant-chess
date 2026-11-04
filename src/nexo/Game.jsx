@@ -751,7 +751,7 @@ function App() {
             setView("play");
           }}
         >
-          <span className="brand-icon">N</span>
+          <span className="brand-icon">E</span>
           <span>
             EVOLUTION CHESS
           </span>
