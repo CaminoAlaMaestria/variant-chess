@@ -7,15 +7,16 @@ const NexoGame = lazy(() => import("../nexo/Game.jsx"));
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NEXO — Ajedrez, sin límites" },
+      { title: "Evolution Chess — Ajedrez, sin límites" },
       {
         name: "description",
-        content: "Tres variantes de ajedrez: Come-come, Correlativo y Azar, con NYX, KAIRO y VEGA.",
+        content:
+          "Cuatro variantes de ajedrez: Come-come, Correlativo, Azar y Renacer, con NYX, KAIRO, VEGA e IRIS.",
       },
-      { property: "og:title", content: "NEXO — Ajedrez, sin límites" },
+      { property: "og:title", content: "Evolution Chess — Ajedrez, sin límites" },
       {
         property: "og:description",
-        content: "Juega Come-come, Correlativo y Azar en un mismo tablero.",
+        content: "Juega Come-come, Correlativo, Azar y Renacer en un mismo tablero.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -28,7 +29,7 @@ function Boot() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background text-center text-foreground">
       <div>
-        <h1 className="text-3xl font-bold">NEXO.</h1>
+        <h1 className="text-3xl font-bold">Evolution Chess.</h1>
         <p className="mt-2 text-muted-foreground">Preparando el tablero…</p>
       </div>
     </div>

@@ -128,7 +128,7 @@ function downloadRecovery() {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = "nexo-partida-respaldo.json";
+  a.download = "evolution-chess-partida-respaldo.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -602,7 +602,7 @@ function App() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = `nexo-${game.variant}-${new Date().toISOString().slice(0, 10)}.${format}`;
+    a.download = `evolution-chess-${game.variant}-${new Date().toISOString().slice(0, 10)}.${format}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     notify("Partida descargada.");
