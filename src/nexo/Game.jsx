@@ -128,7 +128,7 @@ function downloadRecovery() {
   );
   const a = document.createElement("a");
   a.href = url;
-  a.download = "nexo-partida-respaldo.json";
+  a.download = "evolution-chess-partida-respaldo.json";
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -138,13 +138,13 @@ class GameBoundary extends React.Component {
     return { failed: true };
   }
   componentDidCatch(error) {
-    console.error("NEXO no pudo renderizar la partida:", error);
+    console.error("Evolution Chess no pudo renderizar la partida:", error);
   }
   render() {
     if (!this.state.failed) return this.props.children;
     return (
       <div className="startup-recovery">
-        <span className="eyebrow">NEXO · RECUPERACIÓN</span>
+        <span className="eyebrow">EVOLUTION CHESS · RECUPERACIÓN</span>
         <h1>No hemos podido abrir la partida.</h1>
         <p>
           Puedes recargar o descargar el registro guardado antes de iniciar una
@@ -602,7 +602,7 @@ function App() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = `nexo-${game.variant}-${new Date().toISOString().slice(0, 10)}.${format}`;
+    a.download = `evolution-chess-${game.variant}-${new Date().toISOString().slice(0, 10)}.${format}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     notify("Partida descargada.");
@@ -751,9 +751,9 @@ function App() {
             setView("play");
           }}
         >
-          <span className="brand-icon">N</span>
+          <span className="brand-icon">E</span>
           <span>
-            NEXO<span className="brand-dot">.</span>
+            EVOLUTION CHESS
           </span>
         </a>
         <div className="brand-caption">EL AJEDREZ EVOLUCIONA</div>
@@ -824,7 +824,7 @@ function App() {
             <ShieldCheck size={14} />
           </div>
           <div className="sidebar-footer">
-            <span>NEXO LAB</span>
+            <span>EVOLUTION CHESS LAB</span>
             <span>v0.3 BETA</span>
           </div>
         </div>
@@ -1978,7 +1978,7 @@ function App() {
                 ? "Elige promoción"
                 : modal === "appearance"
                   ? "Personaliza tu tablero"
-                  : "NEXO"
+                  : "Evolution Chess"
             }
           >
             <IconButton
