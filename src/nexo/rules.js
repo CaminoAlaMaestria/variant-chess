@@ -361,7 +361,7 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
           ? "Azar"
           : "Correlativo mejorado";
   const tags = {
-    Event: "NEXO · " + name,
+    Event: "Evolution Chess · " + name,
     Site: "Local",
     Date: new Date().toISOString().slice(0, 10).replaceAll("-", "."),
     White: names.w,
