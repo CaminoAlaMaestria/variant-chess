@@ -1,7 +1,16 @@
 // Runs Fairy-Stockfish 14 (WebAssembly) in the browser. Same logic as the
 // original server.js: one fresh engine run per request, same depth/time/skill.
 import FairyStockfish from "./fairy-stockfish.js";
-import { legalMoves, applyMove, material, uci, boardFromFen, other } from "../rules.js";
+import {
+  legalMoves,
+  applyMove,
+  material,
+  uci,
+  boardFromFen,
+  other,
+  values,
+  RESERVE_TYPES,
+} from "../rules.js";
 
 const VARIANTS_INI =
   "[comecome:antichess]\nstalemateValue = draw\nstalematePieceCount = false\npromotionPieceTypes = nbrqk\n";
@@ -55,6 +64,9 @@ function evaluate(s, color) {
     return s.result.winner === color ? 100000 : s.result.winner === null ? 0 : -100000;
   const mat = material(s.fen);
   let v = mat[color] - mat[other(color)];
+  if (s.variant === "renacer")
+    for (const p of RESERVE_TYPES)
+      v += 0.75 * values[p] * ((s.reserves[color][p] || 0) - (s.reserves[other(color)][p] || 0));
   const b = boardFromFen(s.fen);
   b.forEach((p, i) => {
     if (p && p.type !== "k") {
@@ -109,10 +121,66 @@ function adaptedMove(state, hint, level) {
   return uci(choice);
 }
 
+// Experimental own-reserve search. Standard Stockfish may suggest board moves,
+// but all deployments and all reply legality are evaluated with Renacer rules.
+function renacerChoice(state, hint, level, legal) {
+  const color = state.turn;
+  const ranked = legal
+    .map((m) => {
+      const next = applyMove(state, m, true);
+      return {
+        m,
+        next,
+        score:
+          evaluate(next, color) +
+          (uci(m) === hint ? 15 : 0) +
+          (level === 1 ? Math.random() * 90 : 0),
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+  if (ranked[0]?.next.result?.winner === color) return uci(ranked[0].m);
+  if (level === 1) return uci(ranked[0].m);
+  const deadline = Date.now() + [0, 350, 650, 1000][level - 1];
+  let choice = ranked[0].m,
+    best = -Infinity;
+  for (const candidate of ranked.slice(0, [0, 5, 8, 10][level - 1])) {
+    if (candidate.next.result) {
+      if (candidate.score > best) {
+        best = candidate.score;
+        choice = candidate.m;
+      }
+      continue;
+    }
+    const replies = legalMoves(candidate.next)
+      .sort(
+        (a, b) =>
+          (b.captured ? values[b.captured] + 1000 : 0) +
+          (b.kind === "drop" ? values[b.piece] / 3 : 0) -
+          ((a.captured ? values[a.captured] + 1000 : 0) +
+            (a.kind === "drop" ? values[a.piece] / 3 : 0)),
+      )
+      .slice(0, [0, 16, 28, 40][level - 1]);
+    let worst = Infinity;
+    for (const reply of replies) {
+      const next = applyMove(candidate.next, reply, true);
+      worst = Math.min(worst, evaluate(next, color));
+      if (Date.now() >= deadline) break;
+    }
+    const score = Number.isFinite(worst)
+      ? 0.8 * worst + 0.2 * candidate.score
+      : candidate.score;
+    if (score > best) {
+      best = score;
+      choice = candidate.m;
+    }
+    if (Date.now() >= deadline) break;
+  }
+  return uci(choice);
+}
 async function move({ state, level = 2 }) {
   if (
     !state ||
-    !["comecome", "correlativo", "azar"].includes(state.variant) ||
+    !["comecome", "correlativo", "azar", "renacer"].includes(state.variant) ||
     typeof state.fen !== "string" ||
     !Number.isInteger(level) ||
     level < 1 ||
@@ -142,6 +210,15 @@ async function move({ state, level = 2 }) {
     }
     return { move: uci(choice), engine: "Stockfish + adaptador de dados", experimental: true };
   }
+  if (state.variant === "renacer") {
+    const boardMoves = legal.filter((m) => m.kind !== "drop").map(uci);
+    const out = boardMoves.length
+      ? await engine({ fen: state.fen, variant: "renacer", level, moves: boardMoves })
+      : { move: null };
+    const mv = renacerChoice({ ...state, history: [], positions: [] }, out.move, level, legal);
+    if (!moves.includes(mv)) throw new Error("El adaptador no devolvió una acción legal");
+    return { move: mv, engine: "Stockfish + adaptador de reservas", experimental: true };
+  }
   const out = await engine({ fen: state.fen, variant: state.variant, level, moves });
   const mv =
     state.variant !== "comecome"
@@ -168,7 +245,7 @@ self.onmessage = async ({ data }) => {
     if (type === "move") result = await move(payload);
     else {
       const { fen, variant } = payload;
-      if (typeof fen !== "string" || !["comecome", "correlativo", "azar"].includes(variant))
+      if (typeof fen !== "string" || !["comecome", "correlativo", "azar", "renacer"].includes(variant))
         throw new Error("Posición no válida");
       result = await engine({ fen, variant, analysis: true });
     }

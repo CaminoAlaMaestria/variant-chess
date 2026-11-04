@@ -44,6 +44,8 @@ import {
   Loader2,
   Dices,
   Trash2,
+  RefreshCcw,
+  PackageOpen,
 } from "lucide-react";
 import {
   initial,
@@ -61,6 +63,9 @@ import {
   rollDice,
   rewindDice,
   DICE_EFFECTS,
+  RESERVE_TYPES,
+  freshReserves,
+  reserveCount,
 } from "./rules.js";
 import { browserSession, writeSession, SESSION_KEY } from "./session.js";
 const THEMES = {
@@ -97,6 +102,15 @@ const VARIANTS = {
     role: "La maestra del azar",
     image: "/vega.png",
     accent: "amber",
+  },
+  renacer: {
+    name: "Renacer",
+    tag: "NINGUNA PIEZA DICE SU ÚLTIMA PALABRA.",
+    desc: "Tu próxima jugada puede ser un regreso.",
+    character: "IRIS",
+    role: "La guardiana de las segundas oportunidades",
+    image: "/iris.png",
+    accent: "cyan",
   },
 };
 const loadedSession = browserSession();
@@ -233,6 +247,7 @@ function App() {
     moves = useMemo(() => legalMoves(game), [game]),
     activeGame = started && !game.result && !isAnalysis;
   const isDice = game.variant === "azar";
+  const isRenacer = game.variant === "renacer";
   const waitingRoll = isDice && game.dice?.phase === "roll";
   const isRemoving = isDice && game.dice?.phase === "remove";
   const myTurn = mode === "local" || game.turn === human;
@@ -242,6 +257,9 @@ function App() {
     : game.fen;
   const board = boardFromFen(displayFen),
     displayTurn = isAnalysis ? reviewed?.nextTurn || "w" : game.turn;
+  const displayedReserves = isAnalysis
+    ? reviewed?.reservesAfter || freshReserves()
+    : game.reserves || freshReserves();
   const last = isAnalysis ? reviewed : game.history.at(-1),
     selectedMoves = selection ? moves.filter((m) => m.from === selection) : [];
   const counts = {
@@ -487,6 +505,17 @@ function App() {
         : `${variant.character} está listo. ¡Buena partida!`,
     );
   }
+  function chooseReserve(color, piece) {
+    if (!activeGame || !myTurn || busy || color !== game.turn) return;
+    if (!moves.some((m) => m.kind === "drop" && m.piece === piece)) {
+      notify(
+        "Esta pieza no tiene ninguna colocación legal: no puede dar jaque ni dejar tu rey amenazado.",
+      );
+      return;
+    }
+    setHint(null);
+    setSelection((x) => (x === "@" + piece ? null : "@" + piece));
+  }
   function chooseSquare(s) {
     if (!activeGame || !myTurn || busy || rolling) return;
     if (waitingRoll) {
@@ -509,6 +538,15 @@ function App() {
         else execute(ms[0]);
         return;
       }
+    }
+    if (
+      selection?.startsWith("@") &&
+      (!board[index(s)] || board[index(s)].color !== game.turn)
+    ) {
+      notify(
+        "Coloca en una casilla vacía, sin dar jaque ni dejar tu rey en jaque. Los peones también tienen filas restringidas.",
+      );
+      return;
     }
     const p = board[index(s)];
     setSelection(
@@ -582,7 +620,9 @@ function App() {
       notify(
         m.kind === "remove"
           ? `Sugerencia: retira la pieza de ${m.to}`
-          : `Sugerencia: ${m.from} → ${m.to}`,
+          : m.kind === "drop"
+            ? `Sugerencia: coloca ${PIECE_NAMES[m.piece].toLowerCase()} de tu reserva en ${m.to}`
+            : `Sugerencia: ${m.from} → ${m.to}`,
       );
     } catch (e) {
       notify(e.message);
@@ -693,7 +733,9 @@ function App() {
           ? "purple-mode"
           : isDice
             ? "amber-mode"
-            : "")
+            : isRenacer
+              ? "cyan-mode"
+              : "")
       }
       style={{
         "--light-square": THEMES[theme].light,
@@ -729,13 +771,6 @@ function App() {
             <span className="nav-live" />
           </button>
           <button
-            className={isAnalysis ? "nav-item selected" : "nav-item"}
-            onClick={openAnalysis}
-          >
-            <Activity size={20} />
-            Análisis
-          </button>
-          <button
             className="nav-item"
             onClick={() => {
               setModal("appearance");
@@ -765,7 +800,7 @@ function App() {
           </span>
           <div>
             Más allá de lo clásico
-            <small>Tres variantes. Infinitas ideas.</small>
+            <small>Cuatro variantes. Infinitas ideas.</small>
           </div>
         </div>
         <div className="sidebar-bottom">
@@ -790,7 +825,7 @@ function App() {
           </div>
           <div className="sidebar-footer">
             <span>NEXO LAB</span>
-            <span>v0.2.1 BETA</span>
+            <span>v0.3 BETA</span>
           </div>
         </div>
       </aside>
@@ -959,10 +994,55 @@ function App() {
                 {isDice ? <Check size={14} /> : <ArrowUpRight size={16} />}
               </span>
             </button>
+            <button
+              className={
+                "variant-card renacer-variant " + (isRenacer ? "chosen" : "")
+              }
+              onClick={() => !isRenacer && requestReset("renacer")}
+            >
+              <span className="variant-symbol">
+                <RefreshCcw size={24} strokeWidth={1.6} />
+              </span>
+              <div>
+                <div className="variant-name">
+                  Renacer <span className="variant-badge">NUEVA</span>
+                </div>
+                <p>Cada pieza tiene otra oportunidad.</p>
+              </div>
+              <span className="variant-check">
+                {isRenacer ? <Check size={14} /> : <ArrowUpRight size={16} />}
+              </span>
+            </button>
           </div>
           <div className="game-layout">
             <section className="board-column">
+              {!isRunning && (
+                <button
+                  className="button primary board-start"
+                  onClick={() => (started ? reset() : start())}
+                >
+                  <Swords size={17} />
+                  {started ? "Nueva partida" : "Empezar partida"}
+                  <ArrowRight size={17} />
+                </button>
+              )}
               <Player color={flipped ? "w" : "b"} top />
+              {isRenacer && (
+                <ReserveBar
+                  color={flipped ? "w" : "b"}
+                  reserves={displayedReserves}
+                  pieces={pieces}
+                  active={
+                    activeGame &&
+                    myTurn &&
+                    !busy &&
+                    game.turn === (flipped ? "w" : "b")
+                  }
+                  selected={selection}
+                  onSelect={chooseReserve}
+                  reviewing={isAnalysis}
+                />
+              )}
               <div className="board-frame">
                 <div
                   className="chessboard"
@@ -998,6 +1078,12 @@ function App() {
                             ? " selected-square"
                             : "") +
                           (isLast ? " last-move" : "") +
+                          (isRenacer &&
+                          selection?.startsWith("@") &&
+                          allowed &&
+                          !isAnalysis
+                            ? " drop-square"
+                            : "") +
                           (checked ? " checked" : "") +
                           (isRemoving && allowed && !isAnalysis
                             ? " removable"
@@ -1058,6 +1144,22 @@ function App() {
                   })}
                 </div>
               </div>
+              {isRenacer && (
+                <ReserveBar
+                  color={flipped ? "b" : "w"}
+                  reserves={displayedReserves}
+                  pieces={pieces}
+                  active={
+                    activeGame &&
+                    myTurn &&
+                    !busy &&
+                    game.turn === (flipped ? "b" : "w")
+                  }
+                  selected={selection}
+                  onSelect={chooseReserve}
+                  reviewing={isAnalysis}
+                />
+              )}
               <Player color={flipped ? "b" : "w"} />
               <div className="board-toolbar">
                 <div className="turn-status">
@@ -1094,6 +1196,11 @@ function App() {
                       <strong>
                         {game.turn === "w" ? "blancas" : "negras"}
                       </strong>
+                      {isRenacer && selection?.startsWith("@") && (
+                        <span className="turn-counter reserve-counter">
+                          Coloca {PIECE_NAMES[selection[1]]?.toLowerCase()}
+                        </span>
+                      )}
                       {isDice && (
                         <span className="turn-counter dice-counter">
                           {isRemoving
@@ -1205,7 +1312,9 @@ function App() {
                 }
               >
                 <span className="rule-icon">
-                  {isDice ? (
+                  {isRenacer ? (
+                    <RefreshCcw size={18} />
+                  ) : isDice ? (
                     <Dices size={18} />
                   ) : game.variant === "comecome" ? (
                     <Target size={18} />
@@ -1214,7 +1323,17 @@ function App() {
                   )}
                 </span>
                 <p>
-                  {isDice ? (
+                  {isRenacer ? (
+                    <>
+                      <strong>
+                        {selection?.startsWith("@")
+                          ? "Elige una casilla marcada."
+                          : "Tu reserva, tu segunda oportunidad."}
+                      </strong>{" "}
+                      Mover o colocar consume tu turno. Coloca sin capturar ni
+                      dar jaque; tu rey siempre a salvo.
+                    </>
+                  ) : isDice ? (
                     <>
                       <strong>
                         {game.dice?.reply
@@ -1264,6 +1383,48 @@ function App() {
               </div>
             </section>
             <aside className="game-panel">
+              {isRenacer && !isAnalysis && (
+                <section className="panel-card reserve-intro">
+                  <div className="panel-heading">
+                    <h2>
+                      <RefreshCcw size={17} /> Una segunda oportunidad
+                    </h2>
+                    <button
+                      className="icon-button"
+                      title="Reglas de Renacer"
+                      onClick={() => setModal("rules-renacer")}
+                    >
+                      <CircleHelp size={15} />
+                    </button>
+                  </div>
+                  <p>
+                    Lo que te capturan vuelve a <strong>tu reserva</strong>, no
+                    a la de tu rival. Recupera una pieza en lugar de mover.
+                  </p>
+                  <div className="reserve-conditions">
+                    <span>
+                      <Check size={12} />
+                      Casilla vacía
+                    </span>
+                    <span>
+                      <Check size={12} />
+                      Sin dar jaque
+                    </span>
+                    <span>
+                      <Check size={12} />
+                      Un turno
+                    </span>
+                  </div>
+                  <div className="reserve-pawn-rule">
+                    <img src={`/pieces/${pieces}/wP.svg`} alt="" />
+                    <p>
+                      Peones blancos: <strong>filas 2–6</strong>
+                      <br />
+                      Peones negros: <strong>filas 3–7</strong>
+                    </p>
+                  </div>
+                </section>
+              )}
               {isDice && !isAnalysis && (
                 <DiceTray
                   game={game}
@@ -1281,7 +1442,9 @@ function App() {
                   <section
                     className={
                       "panel-card setup-panel" +
-                      (isDice && started ? " dice-setup-active" : "")
+                      ((isDice || isRenacer) && started
+                        ? " dice-setup-active"
+                        : "")
                     }
                   >
                     <div className="panel-heading">
@@ -1323,7 +1486,9 @@ function App() {
                                   ? "1"
                                   : isDice
                                     ? "3"
-                                    : "2"}
+                                    : isRenacer
+                                      ? "4"
+                                      : "2"}
                               </span>
                             </h3>
                             <p>{variant.role}</p>
@@ -1333,7 +1498,9 @@ function App() {
                                 ? "FAIRY-STOCKFISH"
                                 : isDice
                                   ? "STOCKFISH + DADOS"
-                                  : "STOCKFISH + ADAPTADOR"}
+                                  : isRenacer
+                                    ? "STOCKFISH + RESERVAS"
+                                    : "STOCKFISH + ADAPTADOR"}
                             </div>
                           </div>
                           <img
@@ -1479,10 +1646,10 @@ function App() {
                     ) : game.result ? (
                       <button
                         className="button primary start-button"
-                        onClick={openAnalysis}
+                        onClick={() => reset()}
                       >
-                        <Activity size={18} />
-                        Analizar partida
+                        <RotateCcw size={18} />
+                        Jugar otra vez
                         <ArrowRight size={18} />
                       </button>
                     ) : (
@@ -1578,8 +1745,12 @@ function App() {
                       <span>{isDice ? "Capturas / retiros" : "Capturas"}</span>
                     </div>
                     <div>
-                      <strong>{groups.length}</strong>
-                      <span>Turnos</span>
+                      <strong>
+                        {isRenacer
+                          ? game.history.filter((h) => h.kind === "drop").length
+                          : groups.length}
+                      </strong>
+                      <span>{isRenacer ? "Recolocaciones" : "Turnos"}</span>
                     </div>
                   </div>
                   <div className="chart-heading">
@@ -1635,7 +1806,9 @@ function App() {
                   <p className="chart-note">
                     {game.variant === "comecome"
                       ? "Arriba: las blancas tienen menos piezas."
-                      : "Balance material, no probabilidad de victoria."}
+                      : isRenacer
+                        ? "Material sobre el tablero; no incluye las reservas ni indica probabilidad de victoria."
+                        : "Balance material, no probabilidad de victoria."}
                   </p>
                   <button
                     className="button secondary evaluate-button"
@@ -1653,7 +1826,8 @@ function App() {
                     <div className="evaluation">
                       <strong>
                         {analysisScore.score?.type === "mate"
-                          ? "Mate " + analysisScore.score.value
+                          ? (isRenacer ? "Mate clásico " : "Mate ") +
+                            analysisScore.score.value
                           : (analysisScore.score?.value / 100).toFixed(2)}
                       </strong>
                       <span>
@@ -1667,9 +1841,11 @@ function App() {
                   <p className="analysis-warning">
                     {game.variant === "comecome"
                       ? "Evaluación real de Fairy-Stockfish con bloqueo configurado como tablas."
-                      : isDice
-                        ? "Evaluación clásica orientativa. No calcula las probabilidades de futuras tiradas ni las extracciones del dado; no es la ventaja exacta de Azar."
-                        : "Evaluación orientativa de ajedrez clásico. Stockfish no entiende los turnos múltiples; no representa la ventaja real de esta variante."}
+                      : isRenacer
+                        ? "Evaluación clásica orientativa: no tiene en cuenta las reservas. Puede señalar un mate que una colocación legal evite. No es la ventaja exacta de Renacer."
+                        : isDice
+                          ? "Evaluación clásica orientativa. No calcula las probabilidades de futuras tiradas ni las extracciones del dado; no es la ventaja exacta de Azar."
+                          : "Evaluación orientativa de ajedrez clásico. Stockfish no entiende los turnos múltiples; no representa la ventaja real de esta variante."}
                   </p>
                 </section>
               )}
@@ -1712,12 +1888,7 @@ function App() {
                               }
                               key={m.i}
                               onClick={() => {
-                                if (isRunning) {
-                                  notify(
-                                    "El historial se podrá explorar al finalizar.",
-                                  );
-                                  return;
-                                }
+                                return;
                                 setView("analysis");
                                 setReview(m.i);
                               }}
@@ -1753,7 +1924,9 @@ function App() {
                       ? "Capturas obligatorias"
                       : isDice
                         ? "Tiradas y extracciones guardadas"
-                        : "Turnos progresivos"}
+                        : isRenacer
+                          ? "Capturas a tu propia reserva"
+                          : "Turnos progresivos"}
                   </span>
                   <button
                     disabled={!game.history.length}
@@ -2025,9 +2198,9 @@ function App() {
                       : "0 — 1"}
                 </div>
                 <p>{game.result?.reason}</p>
-                <button className="button primary full" onClick={openAnalysis}>
-                  <Activity size={18} />
-                  Analizar partida
+                <button className="button primary full" onClick={() => reset()}>
+                  <RotateCcw size={18} />
+                  Jugar otra vez
                   <ArrowRight size={18} />
                 </button>
                 <div className="modal-button-row">
@@ -2135,6 +2308,7 @@ function App() {
   );
 }
 function Rules({ variant }) {
+  if (variant === "renacer") return <RenacerRules />;
   if (variant === "azar") return <DiceRules />;
   return (
     <div className="rules-content">
@@ -2366,7 +2540,7 @@ function DiceTray({
         <div className="dice-action-note">
           <span className="status-dot" />
           {game.result
-            ? "Explora la partida en el análisis."
+            ? "Partida terminada. Descarga el PGN o juega otra vez."
             : d.phase === "remove"
               ? myTurn
                 ? "Selecciona una pieza rival marcada en el tablero."
@@ -2483,6 +2657,161 @@ function DiceRules() {
         movimientos y piezas retiradas se guardan. Deshacer conserva la tirada
         original. El PGN es extendido; utiliza JSON para conservar el registro
         exacto.
+      </p>
+    </div>
+  );
+}
+
+const PIECE_NAMES = {
+  p: "Peón",
+  n: "Caballo",
+  b: "Alfil",
+  r: "Torre",
+  q: "Dama",
+};
+function ReserveBar({
+  color,
+  reserves,
+  pieces,
+  active,
+  selected,
+  onSelect,
+  reviewing,
+}) {
+  const total = reserveCount(reserves, color);
+  return (
+    <section
+      className={"reserve-bar " + (active ? "active-reserve" : "")}
+      aria-label={`Reserva de ${color === "w" ? "blancas" : "negras"}`}
+    >
+      <div className="reserve-label">
+        <PackageOpen size={15} />
+        <div>
+          <strong>{color === "w" ? "Reserva blanca" : "Reserva negra"}</strong>
+          <span>
+            {total
+              ? `${total} ${total === 1 ? "pieza disponible" : "piezas disponibles"}`
+              : reviewing
+                ? "Sin piezas en reserva"
+                : "Tus piezas capturadas volverán aquí"}
+          </span>
+        </div>
+      </div>
+      <div className="reserve-pieces">
+        {RESERVE_TYPES.map((p) => {
+          const count = reserves[color][p] || 0;
+          return (
+            <button
+              key={p}
+              className={
+                "reserve-piece " +
+                (!count ? "empty-reserve-piece " : "") +
+                (active && selected === "@" + p ? "selected-reserve-piece" : "")
+              }
+              disabled={!count || !active}
+              aria-label={`Reserva ${color === "w" ? "blanca" : "negra"}: ${PIECE_NAMES[p]}, ${count}`}
+              title={
+                !count
+                  ? `${PIECE_NAMES[p]}: todavía no hay ninguno en tu reserva`
+                  : active
+                    ? `Colocar ${PIECE_NAMES[p].toLowerCase()}`
+                    : "Disponible cuando te toque jugar"
+              }
+              onClick={() => onSelect(color, p)}
+              draggable={active && count > 0}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", "@" + p);
+                onSelect(color, p);
+              }}
+            >
+              <img
+                draggable={false}
+                src={`/pieces/${pieces}/${color}${p.toUpperCase()}.svg`}
+                alt=""
+              />
+              <span className="reserve-quantity">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+function RenacerRules() {
+  return (
+    <div className="rules-content renacer-rules">
+      <div>
+        <span>01</span>
+        <section>
+          <h3>Lo que pierdes, vuelve a ti.</h3>
+          <p>
+            Jugamos ajedrez normal, con una excepción: cada pieza capturada pasa
+            a la reserva de su propietario, manteniendo su color. No se entrega
+            al jugador que captura. El rey nunca entra en la reserva.
+          </p>
+        </section>
+      </div>
+      <div>
+        <span>02</span>
+        <section>
+          <h3>Mover o recuperar. Una sola acción.</h3>
+          <p>
+            En tu turno puedes mover normalmente, con capturas y jaques
+            normales, o colocar una pieza de tu reserva. La colocación ocupa el
+            turno completo y solo puede hacerse en una casilla vacía: no
+            captura, no da jaque y no deja a tu rey amenazado.
+          </p>
+        </section>
+      </div>
+      <div>
+        <span>03</span>
+        <section>
+          <h3>Cada peón tiene su territorio.</h3>
+          <p>
+            Las filas se cuentan desde el lado de cada jugador. Peones blancos:
+            solo filas 2 a 6; peones negros: solo filas 3 a 7. Se prohíben la
+            primera, la penúltima y la última fila propias. Un peón colocado en
+            su fila inicial puede después avanzar dos casillas, como en ajedrez
+            normal.
+          </p>
+        </section>
+      </div>
+      <div>
+        <span>04</span>
+        <section>
+          <h3>La promoción se conserva.</h3>
+          <p>
+            Si te capturan una dama que antes fue un peón, regresa a tu reserva
+            como dama. Se aplica lo mismo a torre, alfil y caballo. Puedes
+            volver a recuperar una pieza tantas veces como sea capturada.
+          </p>
+        </section>
+      </div>
+      <div className="rules-note">
+        <ShieldCheck size={18} />
+        <p>
+          Una pieza de reserva puede bloquear un jaque si deja a tu rey a salvo
+          y no da jaque al rival. Solo hay mate cuando no existe defensa, ni
+          moviendo ni colocando. Devolver una torre no recupera derechos de
+          enroque; colocar consume la oportunidad de captura al paso.
+        </p>
+      </div>
+      <div className="rules-note">
+        <Cpu size={18} />
+        <p>
+          IRIS usa Stockfish con un adaptador experimental de reservas propias;
+          no es Crazyhouse ni soporte nativo de estas reglas. La evaluación
+          numérica del análisis es clásica y no cuenta las reservas.
+        </p>
+      </div>
+      <p className="rules-small">
+        Se mantienen los relojes y las tablas automáticas por repetición o 100
+        movimientos individuales sin peón ni captura. Las repeticiones cuentan
+        las reservas. Material insuficiente: solo reyes o una única pieza menor
+        entre tablero y reservas; no se declaran tablas automáticamente por
+        alfiles del mismo color porque pueden recolocarse. El PGN usa notación
+        extendida, como N@f3, y comentarios de reserva. JSON conserva el estado
+        completo.
       </p>
     </div>
   );

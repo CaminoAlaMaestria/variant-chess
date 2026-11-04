@@ -45,15 +45,18 @@ export function initial(variant = "comecome") {
     turnIndex: 0,
     remaining: variant === "azar" ? 0 : 1,
     ...(variant === "azar" ? { dice: freshDice(), rolls: [] } : {}),
+    ...(variant === "renacer" ? { reserves: freshReserves() } : {}),
     history: [],
     result: null,
     positions: [
       fen.split(" ").slice(0, 4).join(" ") +
         (variant === "comecome"
           ? ""
-          : variant === "azar"
-            ? "|roll|0|0|0"
-            : "|0|1"),
+          : variant === "renacer"
+            ? "|" + reserveKey(freshReserves())
+            : variant === "azar"
+              ? "|roll|0|0|0"
+              : "|0|1"),
     ],
   };
 }
@@ -159,6 +162,7 @@ export function legalMoves(state) {
   if (state.result) return [];
   if (state.variant === "comecome") return antiMoves(state);
   if (state.variant === "azar") return diceLegalMoves(state);
+  if (state.variant === "renacer") return renacerMoves(state);
   try {
     const chess = new Chess(state.fen);
     return chess
@@ -179,7 +183,11 @@ export function legalMoves(state) {
   }
 }
 export function uci(m) {
-  return m.kind === "remove" ? "@" + m.to : m.from + m.to + (m.promotion || "");
+  return m.kind === "drop"
+    ? m.piece.toUpperCase() + "@" + m.to
+    : m.kind === "remove"
+      ? "@" + m.to
+      : m.from + m.to + (m.promotion || "");
 }
 export function inCheck(state) {
   if (state.variant === "comecome") return false;
@@ -191,6 +199,8 @@ export function inCheck(state) {
 }
 export function applyMove(state, input, fast = false) {
   if (state.variant === "azar") return applyDiceAction(state, input, fast);
+  if (state.variant === "renacer")
+    return applyRenacerAction(state, input, fast);
   const m =
     typeof input === "string"
       ? legalMoves(state).find((x) => uci(x) === input)
@@ -345,9 +355,11 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
   const name =
     state.variant === "comecome"
       ? "Come-come"
-      : state.variant === "azar"
-        ? "Azar"
-        : "Correlativo mejorado";
+      : state.variant === "renacer"
+        ? "Renacer"
+        : state.variant === "azar"
+          ? "Azar"
+          : "Correlativo mejorado";
   const tags = {
     Event: "NEXO · " + name,
     Site: "Local",
@@ -367,9 +379,11 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
     "{ " +
     (state.variant === "comecome"
       ? "Captura obligatoria. Rey no real. Sin enroque. Bloqueo = tablas."
-      : state.variant === "azar"
-        ? "PGN extendido Azar. Dado 1: una jugada; 2: dos; 3: una cada uno y tira el rival; 4: alfil o caballo; 5: permitir un jaque rival legal, sin dejar el rey en jaque; 6: retirar una pieza rival excepto el rey. Las extracciones son comentarios con FEN; para reproducción exacta usar JSON."
-        : "Turnos 1,2,3,4,5,6; después ciclo 2,3,4,5,6. Jaque solo en el último movimiento. Salir del jaque inmediatamente. Notación extendida: agrupada por turnos, no por pares de jugadas.") +
+      : state.variant === "renacer"
+        ? "PGN extendido Renacer: capturas a la reserva del propietario. Colocar consume el turno, en casilla vacía, sin jaque. Peones: blancas filas 2-6; negras 3-7. Promociones conservadas. Piezas colocadas no restituyen enroque. Usar JSON para conservar reservas exactas."
+        : state.variant === "azar"
+          ? "PGN extendido Azar. Dado 1: una jugada; 2: dos; 3: una cada uno y tira el rival; 4: alfil o caballo; 5: permitir un jaque rival legal, sin dejar el rey en jaque; 6: retirar una pieza rival excepto el rey. Las extracciones son comentarios con FEN; para reproducción exacta usar JSON."
+          : "Turnos 1,2,3,4,5,6; después ciclo 2,3,4,5,6. Jaque solo en el último movimiento. Salir del jaque inmediatamente. Notación extendida: agrupada por turnos, no por pares de jugadas.") +
     " }\n";
   let prev = -1;
   for (const h of state.history) {
@@ -384,6 +398,8 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
         ? `{ Retira ${h.captured.toUpperCase()} en ${h.to}. FEN: ${h.fen} } `
         : h.san + " ";
     if (state.variant === "correlativo") txt += `{ ${h.step}/${h.budget} } `;
+    if (state.variant === "renacer" && (h.captured || h.kind === "drop"))
+      txt += `{ Reserva B/N p,n,b,r,q: ${reserveKey(h.reservesAfter)} } `;
   }
   return txt + "\n" + result + "\n";
 }
@@ -655,4 +671,179 @@ export function rewindDice(state, length) {
   if (s.dice.phase === "roll" && state.history[length])
     s = rollDice(s, state.history[length].diceFace);
   return s;
+}
+
+// RENACER: a captured piece returns to its owner's reserve, not its capturer's.
+export const RESERVE_TYPES = ["p", "n", "b", "r", "q"];
+export function freshReserves() {
+  return {
+    w: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+    b: { p: 0, n: 0, b: 0, r: 0, q: 0 },
+  };
+}
+export function reserveCount(reserves, color) {
+  return RESERVE_TYPES.reduce((n, p) => n + (reserves?.[color]?.[p] || 0), 0);
+}
+export function reserveKey(reserves) {
+  return ["w", "b"]
+    .map((c) => RESERVE_TYPES.map((p) => reserves?.[c]?.[p] || 0).join(","))
+    .join("/");
+}
+export function renacerMoves(state) {
+  if (state.result) return [];
+  const chess = new Chess(state.fen),
+    board = boardFromFen(state.fen),
+    turn = state.turn;
+  const moves = normalMoves(state.fen);
+  if (!reserveCount(state.reserves, turn)) return moves;
+  const ownKing = square(
+    board.findIndex((p) => p?.type === "k" && p.color === turn),
+  );
+  const enemyKing = square(
+    board.findIndex((p) => p?.type === "k" && p.color === other(turn)),
+  );
+  for (const piece of RESERVE_TYPES) {
+    if (!(state.reserves?.[turn]?.[piece] > 0)) continue;
+    for (let i = 0; i < 64; i++) {
+      if (board[i]) continue;
+      const to = square(i),
+        rank = Number(to[1]);
+      if (
+        piece === "p" &&
+        (turn === "w" ? [1, 7, 8] : [8, 2, 1]).includes(rank)
+      )
+        continue;
+      chess.put({ type: piece, color: turn }, to);
+      // A deployment may block an existing check but may never give check.
+      const safe =
+        !chess.isAttacked(ownKing, other(turn)) &&
+        !chess.isAttacked(enemyKing, turn);
+      chess.remove(to);
+      if (safe)
+        moves.push({
+          kind: "drop",
+          from: "@" + piece,
+          to,
+          piece,
+          color: turn,
+          san: piece.toUpperCase() + "@" + to,
+        });
+    }
+  }
+  return moves;
+}
+function renacerInsufficient(fen, reserves) {
+  const remaining = boardFromFen(fen)
+    .filter((p) => p && p.type !== "k")
+    .map((p) => p.type);
+  for (const color of ["w", "b"])
+    for (const piece of RESERVE_TYPES)
+      for (let n = 0; n < (reserves[color][piece] || 0); n++)
+        remaining.push(piece);
+  // Same-colour bishops are not necessarily dead here: they can return on
+  // different-colour squares. Use only the provable bare-king/single-minor cases.
+  return (
+    remaining.length === 0 ||
+    (remaining.length === 1 && ["b", "n"].includes(remaining[0]))
+  );
+}
+export function applyRenacerAction(state, input, fast = false) {
+  if (state.result) throw new Error("La partida ya ha terminado");
+  const m =
+    fast && typeof input !== "string"
+      ? input
+      : renacerMoves(state).find(
+          (x) => uci(x) === (typeof input === "string" ? input : uci(input)),
+        );
+  if (!m) throw new Error("Movimiento o colocación no permitido");
+  const reserves = { w: { ...state.reserves.w }, b: { ...state.reserves.b } },
+    turn = other(state.turn);
+  let fen, san;
+  if (m.kind === "drop") {
+    const board = boardFromFen(state.fen),
+      f = state.fen.split(" ");
+    board[index(m.to)] = { type: m.piece, color: state.turn };
+    reserves[state.turn][m.piece]--;
+    fen = toFen(
+      board,
+      turn,
+      f[2],
+      "-",
+      m.piece === "p" ? 0 : Number(f[4]) + 1,
+      Number(f[5]) + (state.turn === "b" ? 1 : 0),
+    );
+    san = m.piece.toUpperCase() + "@" + m.to;
+  } else {
+    const chess = new Chess(state.fen),
+      made = chess.move({ from: m.from, to: m.to, promotion: m.promotion });
+    fen = chess.fen();
+    san = made.san;
+    if (made.captured) reserves[turn][made.captured]++;
+  }
+  const key = fen.split(" ").slice(0, 4).join(" ") + "|" + reserveKey(reserves);
+  const next = {
+    ...state,
+    fen,
+    turn,
+    turnIndex: state.turnIndex + 1,
+    remaining: 1,
+    reserves,
+    result: null,
+    positions: fast ? [] : [...state.positions, key],
+  };
+  const legal = renacerMoves(next),
+    check = new Chess(fen).isCheck();
+  if (!legal.length)
+    next.result = check
+      ? {
+          winner: state.turn,
+          reason: "Jaque mate: tampoco hay una defensa desde la reserva.",
+        }
+      : {
+          winner: null,
+          reason:
+            "Tablas por ahogado: sin movimientos ni colocaciones legales.",
+        };
+  else if (renacerInsufficient(fen, reserves))
+    next.result = {
+      winner: null,
+      reason: "Tablas por material insuficiente, contando las reservas.",
+    };
+  else if (Number(fen.split(" ")[4]) >= 100)
+    next.result = {
+      winner: null,
+      reason: "Tablas por la regla de los 50 movimientos.",
+    };
+  else if (!fast && next.positions.filter((x) => x === key).length >= 3)
+    next.result = {
+      winner: null,
+      reason: "Tablas por triple repetición, incluidas las reservas.",
+    };
+  if (m.kind !== "drop" && check)
+    san =
+      san.replace(/[+#]$/, "") +
+      (next.result?.winner === state.turn ? "#" : "+");
+  next.history = fast
+    ? []
+    : [
+        ...state.history,
+        {
+          ...m,
+          san,
+          fen,
+          before: state.fen,
+          turnIndex: state.turnIndex,
+          step: 1,
+          budget: 1,
+          remaining: 1,
+          nextTurn: turn,
+          nextTurnIndex: next.turnIndex,
+          reservesBefore: {
+            w: { ...state.reserves.w },
+            b: { ...state.reserves.b },
+          },
+          reservesAfter: { w: { ...reserves.w }, b: { ...reserves.b } },
+        },
+      ];
+  return next;
 }

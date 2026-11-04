@@ -1,7 +1,7 @@
 import { validateFen } from "chess.js";
-import { boardFromFen } from "./rules.js";
+import { boardFromFen, RESERVE_TYPES } from "./rules.js";
 export const SESSION_KEY = "nexo-session-v1";
-const variants = ["comecome", "correlativo", "azar"];
+const variants = ["comecome", "correlativo", "azar", "renacer"];
 function validFen(fen, variant) {
   if (
     typeof fen !== "string" ||
@@ -68,6 +68,26 @@ export function validSessionGame(g) {
       typeof g.result.reason !== "string")
   )
     return false;
+  if (g.variant === "renacer") {
+    const validReserve = (r) =>
+      r &&
+      ["w", "b"].every(
+        (c) =>
+          r[c] &&
+          RESERVE_TYPES.every(
+            (p) => Number.isInteger(r[c][p]) && r[c][p] >= 0 && r[c][p] <= 30,
+          ) &&
+          !r[c].k,
+      );
+    if (
+      !validReserve(g.reserves) ||
+      g.history.some(
+        (h) =>
+          !validReserve(h.reservesBefore) || !validReserve(h.reservesAfter),
+      )
+    )
+      return false;
+  }
   if (g.variant === "azar") {
     const d = g.dice;
     if (
