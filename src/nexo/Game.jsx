@@ -1977,6 +1977,7 @@ function App() {
               promotion
                 ? "Elige promoción"
                 : modal === "appearance"
+                  ? "Personaliza tu tablero"
                   : "Evolution Chess"
             }
           >
