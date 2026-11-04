@@ -138,13 +138,13 @@ class GameBoundary extends React.Component {
     return { failed: true };
   }
   componentDidCatch(error) {
-    console.error("NEXO no pudo renderizar la partida:", error);
+    console.error("Evolution Chess no pudo renderizar la partida:", error);
   }
   render() {
     if (!this.state.failed) return this.props.children;
     return (
       <div className="startup-recovery">
-        <span className="eyebrow">NEXO · RECUPERACIÓN</span>
+        <span className="eyebrow">EVOLUTION CHESS · RECUPERACIÓN</span>
         <h1>No hemos podido abrir la partida.</h1>
         <p>
           Puedes recargar o descargar el registro guardado antes de iniciar una
@@ -753,7 +753,7 @@ function App() {
         >
           <span className="brand-icon">N</span>
           <span>
-            NEXO<span className="brand-dot">.</span>
+            EVOLUTION CHESS
           </span>
         </a>
         <div className="brand-caption">EL AJEDREZ EVOLUCIONA</div>
@@ -824,7 +824,7 @@ function App() {
             <ShieldCheck size={14} />
           </div>
           <div className="sidebar-footer">
-            <span>NEXO LAB</span>
+            <span>EVOLUTION CHESS LAB</span>
             <span>v0.3 BETA</span>
           </div>
         </div>
@@ -1977,8 +1977,7 @@ function App() {
               promotion
                 ? "Elige promoción"
                 : modal === "appearance"
-                  ? "Personaliza tu tablero"
-                  : "NEXO"
+                  : "Evolution Chess"
             }
           >
             <IconButton
