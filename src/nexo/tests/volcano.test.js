@@ -12,7 +12,7 @@ import {
   reserveCount,
   inCheck,
   pgn,
-} from "../src/rules.js";
+} from "../rules.js";
 import {
   freshVolcano,
   volcanoPhase,
@@ -22,8 +22,8 @@ import {
   volcanoOutcome,
   rewindVolcano,
   volcanoPositionKey,
-} from "../src/volcano.js";
-import { validSessionGame } from "../src/session.js";
+} from "../volcano.js";
+import { validSessionGame } from "../session.js";
 function pos(
   fen,
   holes = [],
