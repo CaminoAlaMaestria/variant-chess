@@ -4314,6 +4314,659 @@ select:disabled {
   background: #b1d1a7;
   border-color: #dcf2c7;
 }
+/* NEXO 0.4 — VOLCÁN / IGNIS */
+.variant-selector {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+.variant-card {
+  padding: 13px 10px;
+  gap: 8px;
+  min-height: 104px;
+}
+.variant-card .variant-name {
+  font-size: 12px;
+}
+.variant-card .variant-symbol {
+  width: 29px;
+  height: 33px;
+}
+.variant-card .variant-symbol svg {
+  width: 20px;
+}
+.variant-card.volcano-variant .variant-symbol {
+  color: #eba976;
+  background: #442b22;
+  border-color: #875239;
+}
+.variant-card.volcano-variant .variant-badge {
+  color: #efba8e;
+  background: #4c3020;
+  border-color: #8c5b36;
+}
+.variant-card.volcano-variant p {
+  color: #b59a85;
+}
+.variant-card.volcano-variant.chosen {
+  border-color: #c47c50;
+  background: linear-gradient(115deg, #432d23, #2b211c);
+}
+.lava-mode {
+  --accent: #f0ad78;
+  --accent-ink: #391d0f;
+  --accent-dim: #4c3023;
+}
+.lava-mode .nav-item.selected {
+  background: #432c22;
+}
+.lava-mode .player-avatar.bot {
+  border-color: #b77e56;
+}
+.lava-mode .clock.active-clock {
+  color: #f0d3b6;
+  background: #3c2d22;
+  border-color: #79563c;
+}
+.lava-mode .rule-icon {
+  color: #e6b084;
+  border-color: #78553c;
+}
+.lava-mode .rule-strip strong {
+  color: #efbf95;
+}
+.lava-mode .rule-strip p {
+  color: #b49b85;
+}
+.lava-mode .level-selector > button.active {
+  background: #533820;
+  border-color: #bd8c5a;
+  color: #eac5a1;
+}
+.lava-mode .reserve-bar {
+  border-color: #574539;
+  background: #29231d;
+}
+.lava-mode .reserve-label strong {
+  color: #cdb79f;
+}
+.lava-mode .reserve-label span,
+.lava-mode .reserve-label > svg {
+  color: #a08970;
+}
+.lava-mode .reserve-bar.active-reserve {
+  background: linear-gradient(110deg, #473020, #2a251d);
+  border-color: #b67a4d;
+}
+.lava-mode .reserve-piece.empty-reserve-piece {
+  background: #2d261e;
+  border-color: #4d3e2d;
+}
+.lava-mode .reserve-piece:not(.empty-reserve-piece) {
+  background: #b3a083;
+  border-color: #d1b593;
+}
+.lava-mode .reserve-piece.selected-reserve-piece {
+  background: #e1b07c;
+  border-color: #ffdcad;
+}
+.lava-mode .reserve-quantity {
+  background: #e1bb86;
+  color: #422d1b;
+  border-color: #f7d6a7;
+}
+.lava-mode .empty-reserve-piece .reserve-quantity {
+  background: #46372a;
+  color: #997d5c;
+  border-color: #644d32;
+}
+.opponent-card.lava {
+  background: #36251e;
+  border-color: #7b4f35;
+}
+.opponent-card.lava:after {
+  background:
+    linear-gradient(to right, #38271e 0%, transparent 75%),
+    linear-gradient(to top, #37261c44, transparent 40%);
+}
+.opponent-card.lava .opponent-tag {
+  color: #e0b68a;
+}
+.opponent-card.lava h3 {
+  color: #f3d6b7;
+}
+.opponent-card.lava h3 > span,
+.opponent-card.lava .engine-tag {
+  color: #c39670;
+}
+.opponent-card.lava p {
+  color: #cda889;
+  font-size: 8px;
+}
+.volcano-panel {
+  padding: 17px 17px 10px;
+  border-color: #674730;
+  background:
+    radial-gradient(ellipse at top right, #64332444, transparent 65%), #251f19;
+}
+.volcano-panel .panel-heading h2 {
+  font-size: 12px;
+  color: #ebc5a1;
+}
+.volcano-panel .panel-heading h2 > svg {
+  color: #f0a56b;
+}
+.volcano-panel .icon-button {
+  color: #b78d66;
+}
+.volcano-scene {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 7px -8px 10px;
+  min-height: 99px;
+}
+.volcano-scene > svg {
+  width: 105px;
+  max-width: 40%;
+  height: 100px;
+  flex-shrink: 0;
+}
+.volcano-scene > div {
+  flex: 1;
+  min-width: 0;
+  padding-right: 5px;
+}
+.volcano-kicker {
+  font-size: 6px;
+  letter-spacing: 1px;
+  font-weight: 500;
+  color: #bc8862;
+}
+.volcano-scene h3 {
+  font-family: "Manrope", sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  color: #f0cfad;
+  margin: 9px 0 6px;
+}
+.volcano-scene p {
+  font-size: 9px;
+  color: #ac876a;
+  margin: 0;
+}
+.volcano-phases {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+.volcano-phases > div {
+  text-align: center;
+  border: 1px solid #534132;
+  border-radius: 6px;
+  background: #211d17;
+  padding: 9px 3px 7px;
+  color: #8e7761;
+}
+.volcano-phases span {
+  display: block;
+  font-size: 6px;
+  letter-spacing: 1px;
+}
+.volcano-phases strong {
+  display: block;
+  font-family: "Manrope", sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 6px 0;
+  color: #b69e81;
+}
+.volcano-phases small {
+  display: block;
+  font-size: 6px;
+  white-space: nowrap;
+  color: #7e6b57;
+}
+.volcano-phases > div.active {
+  background: #513522;
+  border-color: #bf8653;
+  box-shadow: inset 0 1px 0 #e2aa7022;
+}
+.volcano-phases > div.active strong {
+  color: #ffd7a8;
+}
+.volcano-phases > div.active span {
+  color: #eac19b;
+}
+.volcano-phases > div.active small {
+  color: #c1956f;
+}
+.volcano-phases > div.complete {
+  background: #2c241b;
+  border-color: #6c4e32;
+}
+.volcano-phases > div.complete strong {
+  color: #b19370;
+}
+.eruption-clock {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 15px;
+  padding: 11px 0;
+  border-top: 1px solid #4e3b2a;
+  color: #d1aa84;
+}
+.eruption-clock .status-dot {
+  margin-top: 5px;
+  background: #eaae78;
+}
+.eruption-clock p {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.8;
+}
+.eruption-clock strong {
+  display: block;
+  font-size: 8px;
+  font-weight: 400;
+  color: #9a7a5a;
+  margin-top: 3px;
+}
+.latest-eruption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid #68462d;
+  border-radius: 6px;
+  background: #3b291c;
+  margin: 0 0 13px;
+}
+.latest-eruption > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  color: #d1a279;
+  white-space: nowrap;
+}
+.latest-eruption b {
+  color: #f3c699;
+  font-weight: 500;
+}
+.latest-eruption small {
+  font-size: 7px;
+  color: #b99a7e;
+  text-align: right;
+  line-height: 1.6;
+}
+.terrain-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8px;
+  color: #aa8b6a;
+  border-top: 1px solid #493829;
+  padding: 12px 0 3px;
+  cursor: pointer;
+}
+.terrain-toggle input {
+  accent-color: #d99760;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+.terrain-toggle > span {
+  margin-left: auto;
+  font-size: 7px;
+  color: #c78450;
+  box-shadow: 0 0 9px #ed874533;
+}
+.square.eruption-zone:after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #b96f35;
+  box-shadow: 0 0 0 2px #e2a66a44;
+  z-index: 4;
+  pointer-events: none;
+}
+.square.molten-square {
+  background: radial-gradient(
+    ellipse at 55% 65%,
+    #963d1e 0%,
+    #532919 20%,
+    #292521 54%,
+    #1c1d19 85%
+  ) !important;
+  box-shadow:
+    inset 0 0 0 1px #67503b,
+    inset 0 0 11px #070904;
+  cursor: not-allowed;
+}
+.square.molten-square:before {
+  content: "";
+  position: absolute;
+  inset: 9%;
+  background: linear-gradient(
+    25deg,
+    #9c4b29,
+    #f0ae63 38%,
+    #ad5026 53%,
+    #df7a3c 70%,
+    #702c1a
+  );
+  clip-path: polygon(
+    4% 38%,
+    25% 46%,
+    39% 36%,
+    48% 42%,
+    56% 19%,
+    62% 10%,
+    59% 33%,
+    55% 49%,
+    75% 53%,
+    92% 36%,
+    81% 59%,
+    62% 61%,
+    54% 73%,
+    64% 95%,
+    50% 79%,
+    45% 66%,
+    29% 81%,
+    8% 86%,
+    24% 74%,
+    40% 57%,
+    24% 52%
+  );
+  filter: drop-shadow(0 0 3px #ed843d);
+  opacity: 0.92;
+  pointer-events: none;
+}
+.square.molten-square:after {
+  content: "";
+  position: absolute;
+  inset: 35%;
+  background: #df844330;
+  border-radius: 50%;
+  filter: blur(4px);
+  box-shadow: 0 0 10px #f1a45122;
+  pointer-events: none;
+}
+.square.molten-square .rank-label,
+.square.molten-square .file-label {
+  color: #ad8c62;
+  opacity: 0.75;
+}
+.square.last-eruption {
+  animation: eruption-flash 700ms ease-out 2;
+}
+.square.swap-source {
+  box-shadow: inset 0 0 0 3px #ce8c3c;
+}
+.square.swap-source:after {
+  content: "↻";
+  position: absolute;
+  right: 3px;
+  top: 2px;
+  z-index: 5;
+  background: #56331b;
+  color: #ffcf91;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  font-size: 15px;
+  line-height: 16px;
+  text-align: center;
+}
+.volcano-counter {
+  background: #493321;
+  border-color: #865e37;
+  color: #efc397;
+  font-size: 8px;
+}
+.swap-alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #b78345;
+  border-radius: 8px;
+  background: linear-gradient(110deg, #4d3420, #30281b);
+  color: #e8be82;
+}
+.swap-alert > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.swap-alert strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+.swap-alert p {
+  font-size: 10px;
+  line-height: 1.8;
+  color: #c2a47b;
+  margin: 4px 0 0;
+}
+.history-eruption {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #e3ac79;
+  background: #4a3121;
+  border: 1px solid #705037;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 8px;
+  white-space: nowrap;
+}
+.volcano-rules .rules-note {
+  background: #3b2c1e;
+  border-color: #7d5734;
+  color: #e2b27c;
+}
+.volcano-rules .rules-note p {
+  color: #c7ab8c;
+}
+.volcano-rules .rules-note strong {
+  color: #edcca2;
+  font-weight: 600;
+}
+.volcano-rules section p + p {
+  margin-top: 9px;
+}
+@keyframes eruption-flash {
+  0% {
+    filter: brightness(2.6);
+    box-shadow:
+      inset 0 0 0 2px #f4c082,
+      0 0 15px #e98d33;
+  }
+  100% {
+    filter: brightness(1);
+    box-shadow: inset 0 0 0 1px #67503b;
+  }
+}
+@media (min-width: 1500px) {
+  .variant-card .variant-name {
+    font-size: 13px;
+  }
+  .variant-card .variant-symbol {
+    width: 30px;
+  }
+  .volcano-scene h3 {
+    font-size: 17px;
+  }
+}
+@media (max-width: 1190px) and (min-width: 761px) {
+  .variant-card {
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 127px;
+    gap: 7px;
+  }
+  .variant-card .variant-name {
+    font-size: 11px;
+  }
+  .variant-card p {
+    font-size: 7px;
+  }
+  .volcano-panel {
+    padding: 15px 13px 10px;
+  }
+  .volcano-scene > svg {
+    width: 88px;
+  }
+  .volcano-scene h3 {
+    font-size: 15px;
+  }
+  .volcano-kicker {
+    font-size: 5px;
+    letter-spacing: 0.8px;
+  }
+  .latest-eruption small {
+    font-size: 6px;
+  }
+  .volcano-phases {
+    gap: 4px;
+  }
+}
+@media (max-width: 760px) {
+  .variant-selector {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .variant-card {
+    flex-direction: row;
+    align-items: center;
+    min-height: 87px;
+    padding: 12px 11px;
+  }
+  .variant-card .variant-name {
+    font-size: 12px;
+  }
+  .variant-card p {
+    font-size: 8px;
+  }
+  .variant-card.volcano-variant {
+    grid-column: 1/-1;
+    min-height: 69px;
+  }
+  .variant-card.volcano-variant .variant-badge {
+    display: inline-flex;
+  }
+  .volcano-panel {
+    padding: 19px 20px 12px;
+  }
+  .volcano-panel .panel-heading h2 {
+    font-size: 13px;
+  }
+  .volcano-scene > svg {
+    width: 120px;
+    height: 105px;
+  }
+  .volcano-scene h3 {
+    font-size: 19px;
+  }
+  .volcano-kicker {
+    font-size: 7px;
+  }
+  .volcano-scene p {
+    font-size: 10px;
+  }
+  .volcano-phases span {
+    font-size: 7px;
+  }
+  .volcano-phases strong {
+    font-size: 22px;
+  }
+  .volcano-phases small {
+    font-size: 7px;
+  }
+  .eruption-clock p {
+    font-size: 11px;
+  }
+  .eruption-clock strong {
+    font-size: 9px;
+  }
+  .latest-eruption > span {
+    font-size: 10px;
+  }
+  .latest-eruption small {
+    font-size: 9px;
+  }
+  .terrain-toggle {
+    font-size: 10px;
+    padding: 14px 0 4px;
+  }
+  .terrain-toggle input {
+    width: 14px;
+    height: 14px;
+  }
+  .swap-alert strong {
+    font-size: 12px;
+  }
+  .swap-alert p {
+    font-size: 10px;
+  }
+  .volcano-counter {
+    display: block;
+    width: max-content;
+    margin: 4px 0 0;
+  }
+  .square.eruption-zone:after {
+    width: 3px;
+    height: 3px;
+    top: 3px;
+    right: 3px;
+  }
+  .square.swap-source:after {
+    width: 14px;
+    height: 14px;
+    font-size: 12px;
+    line-height: 13px;
+  }
+}
+@media (max-width: 390px) {
+  .volcano-scene > svg {
+    width: 90px;
+  }
+  .volcano-scene h3 {
+    font-size: 17px;
+  }
+  .volcano-kicker {
+    font-size: 6px;
+  }
+  .latest-eruption small {
+    font-size: 8px;
+  }
+}
+@media (max-width: 760px) {
+  .game-panel {
+    align-items: stretch;
+  }
+  .game-panel > .panel-card {
+    width: 100%;
+    min-width: 0;
+  }
+  .opponent-card.lava p {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .square.last-eruption {
+    animation: none;
+  }
+}
 /* Lovable: start button in board toolbar + desktop board fit */
 .board-column > .board-start {
   width: 100%;
