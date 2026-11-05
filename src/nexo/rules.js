@@ -1,4 +1,11 @@
 import { Chess } from "chess.js";
+import {
+  freshVolcano,
+  volcanoLegalMoves,
+  volcanoInCheck,
+  applyVolcanoAction,
+  volcanoPositionKey,
+} from "./volcano.js";
 export const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 export const other = (c) => (c === "w" ? "b" : "w");
 export const square = (i) => "abcdefgh"[i % 8] + (8 - Math.floor(i / 8));
@@ -45,18 +52,23 @@ export function initial(variant = "comecome") {
     turnIndex: 0,
     remaining: variant === "azar" ? 0 : 1,
     ...(variant === "azar" ? { dice: freshDice(), rolls: [] } : {}),
-    ...(variant === "renacer" ? { reserves: freshReserves() } : {}),
+    ...(["renacer", "volcan"].includes(variant)
+      ? { reserves: freshReserves() }
+      : {}),
+    ...(variant === "volcan" ? { volcano: freshVolcano() } : {}),
     history: [],
     result: null,
     positions: [
       fen.split(" ").slice(0, 4).join(" ") +
         (variant === "comecome"
           ? ""
-          : variant === "renacer"
-            ? "|" + reserveKey(freshReserves())
-            : variant === "azar"
-              ? "|roll|0|0|0"
-              : "|0|1"),
+          : variant === "volcan"
+            ? "|" + reserveKey(freshReserves()) + "|holes=|phase=0"
+            : variant === "renacer"
+              ? "|" + reserveKey(freshReserves())
+              : variant === "azar"
+                ? "|roll|0|0|0"
+                : "|0|1"),
     ],
   };
 }
@@ -163,6 +175,7 @@ export function legalMoves(state) {
   if (state.variant === "comecome") return antiMoves(state);
   if (state.variant === "azar") return diceLegalMoves(state);
   if (state.variant === "renacer") return renacerMoves(state);
+  if (state.variant === "volcan") return volcanoLegalMoves(state);
   try {
     const chess = new Chess(state.fen);
     return chess
@@ -183,14 +196,17 @@ export function legalMoves(state) {
   }
 }
 export function uci(m) {
-  return m.kind === "drop"
-    ? m.piece.toUpperCase() + "@" + m.to
-    : m.kind === "remove"
-      ? "@" + m.to
-      : m.from + m.to + (m.promotion || "");
+  return m.kind === "swap"
+    ? m.piece.toUpperCase() + "~" + m.from + m.to + (m.promotion || "")
+    : m.kind === "drop"
+      ? m.piece.toUpperCase() + "@" + m.to
+      : m.kind === "remove"
+        ? "@" + m.to
+        : m.from + m.to + (m.promotion || "");
 }
 export function inCheck(state) {
   if (state.variant === "comecome") return false;
+  if (state.variant === "volcan") return volcanoInCheck(state);
   try {
     return new Chess(state.fen).isCheck();
   } catch {
@@ -198,6 +214,7 @@ export function inCheck(state) {
   }
 }
 export function applyMove(state, input, fast = false) {
+  if (state.variant === "volcan") return applyVolcanoAction(state, input, fast);
   if (state.variant === "azar") return applyDiceAction(state, input, fast);
   if (state.variant === "renacer")
     return applyRenacerAction(state, input, fast);
@@ -355,11 +372,13 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
   const name =
     state.variant === "comecome"
       ? "Come-come"
-      : state.variant === "renacer"
-        ? "Renacer"
-        : state.variant === "azar"
-          ? "Azar"
-          : "Correlativo mejorado";
+      : state.variant === "volcan"
+        ? "Volcán"
+        : state.variant === "renacer"
+          ? "Renacer"
+          : state.variant === "azar"
+            ? "Azar"
+            : "Correlativo mejorado";
   const tags = {
     Event: "Evolution Chess · " + name,
     Site: "Local",
@@ -379,11 +398,13 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
     "{ " +
     (state.variant === "comecome"
       ? "Captura obligatoria. Rey no real. Sin enroque. Bloqueo = tablas."
-      : state.variant === "renacer"
-        ? "PGN extendido Renacer: capturas a la reserva del propietario. Colocar consume el turno, en casilla vacía, sin jaque. Peones: blancas filas 2-6; negras 3-7. Promociones conservadas. Piezas colocadas no restituyen enroque. Usar JSON para conservar reservas exactas."
-        : state.variant === "azar"
-          ? "PGN extendido Azar. Dado 1: una jugada; 2: dos; 3: una cada uno y tira el rival; 4: alfil o caballo; 5: permitir un jaque rival legal, sin dejar el rey en jaque; 6: retirar una pieza rival excepto el rey. Las extracciones son comentarios con FEN; para reproducción exacta usar JSON."
-          : "Turnos 1,2,3,4,5,6; después ciclo 2,3,4,5,6. Jaque solo en el último movimiento. Salir del jaque inmediatamente. Notación extendida: agrupada por turnos, no por pares de jugadas.") +
+      : state.variant === "volcan"
+        ? "PGN extendido Volcán: erupción tras cada movimiento negro. Erupciones 1-4 filas 4-5; 5-8 filas 3-6; 9-12 filas 2-7; desde la 13 todo el tablero. Casillas derretidas bloquean el paso, salvo saltos de caballo. Rey en lava pierde. Sin movimientos: sustitución y movimiento obligatorio de la nueva pieza; si tampoco se puede, mate en jaque o tablas sin jaque. Terreno, erupciones y reservas exactas en JSON."
+        : state.variant === "renacer"
+          ? "PGN extendido Renacer: capturas a la reserva del propietario. Colocar consume el turno, en casilla vacía, sin jaque. Peones: blancas filas 2-6; negras 3-7. Promociones conservadas. Piezas colocadas no restituyen enroque. Usar JSON para conservar reservas exactas."
+          : state.variant === "azar"
+            ? "PGN extendido Azar. Dado 1: una jugada; 2: dos; 3: una cada uno y tira el rival; 4: alfil o caballo; 5: permitir un jaque rival legal, sin dejar el rey en jaque; 6: retirar una pieza rival excepto el rey. Las extracciones son comentarios con FEN; para reproducción exacta usar JSON."
+            : "Turnos 1,2,3,4,5,6; después ciclo 2,3,4,5,6. Jaque solo en el último movimiento. Salir del jaque inmediatamente. Notación extendida: agrupada por turnos, no por pares de jugadas.") +
     " }\n";
   let prev = -1;
   for (const h of state.history) {
@@ -398,6 +419,14 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
         ? `{ Retira ${h.captured.toUpperCase()} en ${h.to}. FEN: ${h.fen} } `
         : h.san + " ";
     if (state.variant === "correlativo") txt += `{ ${h.step}/${h.budget} } `;
+    if (state.variant === "volcan") {
+      if (h.kind === "swap")
+        txt += `{ Sustitución ${h.swapFrom.toUpperCase()} por ${h.piece.toUpperCase()} en ${h.from}; movimiento incluido } `;
+      if (h.eruption)
+        txt += `{ Erupción ${h.eruption.number}: ${h.eruption.square}${h.eruption.piece ? "; pierde " + h.eruption.piece.color + h.eruption.piece.type.toUpperCase() : ""}; casilla bloqueada } `;
+      if (h.eruption || h.captured || h.kind === "swap")
+        txt += `{ Eliminadas B/N p,n,b,r,q: ${reserveKey(h.reservesAfter)}; terreno: ${h.volcanoAfter.melted.join(",")} } `;
+    }
     if (state.variant === "renacer" && (h.captured || h.kind === "drop"))
       txt += `{ Reserva B/N p,n,b,r,q: ${reserveKey(h.reservesAfter)} } `;
   }
