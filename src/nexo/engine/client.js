@@ -45,4 +45,4 @@ function call(type, payload, signal) {
 }
 
 export const engineMove = (state, level, signal) => call("move", { state, level }, signal);
-export const engineEvaluate = (fen, variant) => call("evaluate", { fen, variant });
+export const engineEvaluate = (fen, variant, state) => call("evaluate", { fen, variant, state });
