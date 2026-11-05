@@ -11,12 +11,12 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Cuatro variantes de ajedrez: Come-come, Correlativo, Azar y Renacer, con NYX, KAIRO, VEGA e IRIS.",
+          "Cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y Volcán, con NYX, KAIRO, VEGA, IRIS e IGNIS.",
       },
       { property: "og:title", content: "Evolution Chess — Ajedrez, sin límites" },
       {
         property: "og:description",
-        content: "Juega Come-come, Correlativo, Azar y Renacer en un mismo tablero.",
+        content: "Juega Come-come, Correlativo, Azar, Renacer y Volcán en un mismo tablero.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

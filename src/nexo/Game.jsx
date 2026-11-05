@@ -1,5 +1,3 @@
-import "./style.css";
-import { engineMove, engineEvaluate } from "./engine/client.js";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Swords,
@@ -46,6 +44,9 @@ import {
   Trash2,
   RefreshCcw,
   PackageOpen,
+  Flame,
+  Mountain,
+  ShieldAlert,
 } from "lucide-react";
 import {
   initial,
@@ -67,6 +68,15 @@ import {
   freshReserves,
   reserveCount,
 } from "./rules.js";
+import {
+  freshVolcano,
+  volcanoPhase,
+  volcanoRanks,
+  meltCandidates,
+  rewindVolcano,
+} from "./volcano.js";
+import "./style.css";
+import { engineMove, engineEvaluate } from "./engine/client.js";
 import { browserSession, writeSession, SESSION_KEY } from "./session.js";
 const THEMES = {
   sage: { name: "Salvia", light: "#e0e4cd", dark: "#7e9780" },
@@ -111,6 +121,15 @@ const VARIANTS = {
     role: "La guardiana de las segundas oportunidades",
     image: "/iris.png",
     accent: "cyan",
+  },
+  volcan: {
+    name: "Volcán",
+    tag: "EL TERRENO TAMBIÉN JUEGA.",
+    desc: "Sobrevive a un tablero que desaparece.",
+    character: "IGNIS",
+    role: "El estratega de la última frontera",
+    image: "/ignis.png",
+    accent: "lava",
   },
 };
 const loadedSession = browserSession();
@@ -236,7 +255,9 @@ function App() {
     ),
     [retry, setRetry] = useState(0),
     [rolling, setRolling] = useState(false),
-    [removal, setRemoval] = useState(null);
+    [removal, setRemoval] = useState(null),
+    [swapPiece, setSwapPiece] = useState(null),
+    [showDanger, setShowDanger] = useState(true);
   const diceTimer = useRef(null);
   const gameRef = useRef(game),
     requestId = useRef(0),
@@ -248,6 +269,8 @@ function App() {
     activeGame = started && !game.result && !isAnalysis;
   const isDice = game.variant === "azar";
   const isRenacer = game.variant === "renacer";
+  const isVolcan = game.variant === "volcan";
+  const mustSwap = isVolcan && moves.some((m) => m.kind === "swap");
   const waitingRoll = isDice && game.dice?.phase === "roll";
   const isRemoving = isDice && game.dice?.phase === "remove";
   const myTurn = mode === "local" || game.turn === human;
@@ -260,8 +283,20 @@ function App() {
   const displayedReserves = isAnalysis
     ? reviewed?.reservesAfter || freshReserves()
     : game.reserves || freshReserves();
+  const displayedVolcano = isAnalysis
+    ? reviewed?.volcanoAfter || freshVolcano()
+    : game.volcano || freshVolcano();
+  const molten = new Set(displayedVolcano.melted);
+  const dangerSquares =
+    isVolcan && showDanger
+      ? new Set(meltCandidates({ volcano: displayedVolcano }))
+      : new Set();
   const last = isAnalysis ? reviewed : game.history.at(-1),
-    selectedMoves = selection ? moves.filter((m) => m.from === selection) : [];
+    selectedMoves = selection
+      ? moves.filter(
+          (m) => m.from === selection && (!mustSwap || m.piece === swapPiece),
+        )
+      : [];
   const counts = {
     w: board.filter((p) => p?.color === "w").length,
     b: board.filter((p) => p?.color === "b").length,
@@ -357,6 +392,7 @@ function App() {
     const valid = legalMoves(current).find((x) => uci(x) === uci(m));
     if (!valid) return;
     setSelection(null);
+    setSwapPiece(null);
     setHint(null);
     setPromotion(null);
     setRemoval(null);
@@ -474,6 +510,7 @@ function App() {
     setGame(initial(v));
     setStarted(false);
     setSelection(null);
+    setSwapPiece(null);
     setHint(null);
     setEngineError("");
     setBusy(false);
@@ -507,6 +544,22 @@ function App() {
   }
   function chooseReserve(color, piece) {
     if (!activeGame || !myTurn || busy || color !== game.turn) return;
+    if (isVolcan) {
+      if (!mustSwap) {
+        notify(
+          "Solo puedes recuperar una pieza si no tienes ningún movimiento legal.",
+        );
+        return;
+      }
+      if (!moves.some((m) => m.kind === "swap" && m.piece === piece)) {
+        notify("Esta pieza no permite una sustitución con movimiento legal.");
+        return;
+      }
+      setSwapPiece((x) => (x === piece ? null : piece));
+      setSelection(null);
+      setHint(null);
+      return;
+    }
     if (!moves.some((m) => m.kind === "drop" && m.piece === piece)) {
       notify(
         "Esta pieza no tiene ninguna colocación legal: no puede dar jaque ni dejar tu rey amenazado.",
@@ -518,6 +571,14 @@ function App() {
   }
   function chooseSquare(s) {
     if (!activeGame || !myTurn || busy || rolling) return;
+    if (isVolcan && molten.has(s)) {
+      notify("Esta casilla se ha derretido: no se puede ocupar ni atravesar.");
+      return;
+    }
+    if (mustSwap && !swapPiece) {
+      notify("Elige primero una pieza de tu reserva de eliminadas.");
+      return;
+    }
     if (waitingRoll) {
       notify("Primero tira el dado para conocer tu acción.");
       return;
@@ -550,7 +611,10 @@ function App() {
     }
     const p = board[index(s)];
     setSelection(
-      p?.color === game.turn && moves.some((m) => m.from === s) ? s : null,
+      p?.color === game.turn &&
+        moves.some((m) => m.from === s && (!mustSwap || m.piece === swapPiece))
+        ? s
+        : null,
     );
   }
   function undo() {
@@ -563,6 +627,7 @@ function App() {
     }
     let g;
     if (isDice) g = rewindDice(game, length);
+    else if (isVolcan) g = rewindVolcano(game, length);
     else {
       g = initial(game.variant);
       for (let i = 0; i < length; i++) {
@@ -572,6 +637,7 @@ function App() {
     }
     setGame(g);
     setSelection(null);
+    setSwapPiece(null);
     setHint(null);
     setModal(null);
     notify("Jugada deshecha. El reloj no se reinicia.");
@@ -617,12 +683,15 @@ function App() {
       const m = moves.find((m) => uci(m) === data.move);
       setHint(m);
       setSelection(m.from);
+      if (m.kind === "swap") setSwapPiece(m.piece);
       notify(
-        m.kind === "remove"
-          ? `Sugerencia: retira la pieza de ${m.to}`
-          : m.kind === "drop"
-            ? `Sugerencia: coloca ${PIECE_NAMES[m.piece].toLowerCase()} de tu reserva en ${m.to}`
-            : `Sugerencia: ${m.from} → ${m.to}`,
+        m.kind === "swap"
+          ? `Sustituye la pieza de ${m.from} por ${PIECE_NAMES[m.piece].toLowerCase()} y muévela a ${m.to}`
+          : m.kind === "remove"
+            ? `Sugerencia: retira la pieza de ${m.to}`
+            : m.kind === "drop"
+              ? `Sugerencia: coloca ${PIECE_NAMES[m.piece].toLowerCase()} de tu reserva en ${m.to}`
+              : `Sugerencia: ${m.from} → ${m.to}`,
       );
     } catch (e) {
       notify(e.message);
@@ -644,7 +713,23 @@ function App() {
     setEvalBusy(true);
     setAnalysisScore(null);
     try {
-      const data = await engineEvaluate(displayFen, game.variant);
+      const data = await engineEvaluate(displayFen, game.variant, isVolcan
+            ? {
+                state: {
+                  ...game,
+                  fen: displayFen,
+                  turn: displayFen.split(" ")[1],
+                  turnIndex: reviewed?.nextTurnIndex || 0,
+                  remaining: 1,
+                  reserves: displayedReserves,
+                  volcano: displayedVolcano,
+                  result:
+                    review === game.history.length - 1 ? game.result : null,
+                  history: [],
+                  positions: [],
+                },
+              }
+            : undefined);
       setAnalysisScore({ ...data, fen: displayFen });
     } catch (e) {
       notify(e.message);
@@ -735,7 +820,9 @@ function App() {
             ? "amber-mode"
             : isRenacer
               ? "cyan-mode"
-              : "")
+              : isVolcan
+                ? "lava-mode"
+                : "")
       }
       style={{
         "--light-square": THEMES[theme].light,
@@ -752,9 +839,7 @@ function App() {
           }}
         >
           <span className="brand-icon">E</span>
-          <span>
-            EVOLUTION CHESS
-          </span>
+          <span>EVOLUTION CHESS</span>
         </a>
         <div className="brand-caption">EL AJEDREZ EVOLUCIONA</div>
         <div className="nav-label">EXPLORA</div>
@@ -800,7 +885,7 @@ function App() {
           </span>
           <div>
             Más allá de lo clásico
-            <small>Cuatro variantes. Infinitas ideas.</small>
+            <small>Cinco variantes. Infinitas ideas.</small>
           </div>
         </div>
         <div className="sidebar-bottom">
@@ -825,7 +910,7 @@ function App() {
           </div>
           <div className="sidebar-footer">
             <span>EVOLUTION CHESS LAB</span>
-            <span>v0.3 BETA</span>
+            <span>v0.4 BETA</span>
           </div>
         </div>
       </aside>
@@ -1013,6 +1098,25 @@ function App() {
                 {isRenacer ? <Check size={14} /> : <ArrowUpRight size={16} />}
               </span>
             </button>
+            <button
+              className={
+                "variant-card volcano-variant " + (isVolcan ? "chosen" : "")
+              }
+              onClick={() => !isVolcan && requestReset("volcan")}
+            >
+              <span className="variant-symbol">
+                <Mountain size={24} strokeWidth={1.6} />
+              </span>
+              <div>
+                <div className="variant-name">
+                  Volcán <span className="variant-badge">NUEVA</span>
+                </div>
+                <p>El terreno también juega.</p>
+              </div>
+              <span className="variant-check">
+                {isVolcan ? <Check size={14} /> : <ArrowUpRight size={16} />}
+              </span>
+            </button>
           </div>
           <div className="game-layout">
             <section className="board-column">
@@ -1027,7 +1131,7 @@ function App() {
                 </button>
               )}
               <Player color={flipped ? "w" : "b"} top />
-              {isRenacer && (
+              {(isRenacer || isVolcan) && (
                 <ReserveBar
                   color={flipped ? "w" : "b"}
                   reserves={displayedReserves}
@@ -1036,9 +1140,19 @@ function App() {
                     activeGame &&
                     myTurn &&
                     !busy &&
+                    (!isVolcan || mustSwap) &&
                     game.turn === (flipped ? "w" : "b")
                   }
-                  selected={selection}
+                  selected={
+                    isVolcan ? (swapPiece ? "@" + swapPiece : null) : selection
+                  }
+                  canDrag={!isVolcan}
+                  eliminated={isVolcan}
+                  lockedReason={
+                    isVolcan
+                      ? "Solo puedes sustituir si no tienes movimientos legales"
+                      : null
+                  }
                   onSelect={chooseReserve}
                   reviewing={isAnalysis}
                 />
@@ -1077,6 +1191,21 @@ function App() {
                           (selection === s && !isAnalysis
                             ? " selected-square"
                             : "") +
+                          (isVolcan && molten.has(s) ? " molten-square" : "") +
+                          (isVolcan && dangerSquares.has(s)
+                            ? " eruption-zone"
+                            : "") +
+                          (isVolcan && last?.eruption?.square === s
+                            ? " last-eruption"
+                            : "") +
+                          (mustSwap &&
+                          swapPiece &&
+                          moves.some(
+                            (m) => m.from === s && m.piece === swapPiece,
+                          ) &&
+                          !isAnalysis
+                            ? " swap-source"
+                            : "") +
                           (isLast ? " last-move" : "") +
                           (isRenacer &&
                           selection?.startsWith("@") &&
@@ -1090,6 +1219,14 @@ function App() {
                             : "") +
                           (hint?.to === s ? " hinted" : "")
                         }
+                        data-molten={
+                          isVolcan && molten.has(s) ? "true" : undefined
+                        }
+                        title={
+                          isVolcan && molten.has(s)
+                            ? `${s}: casilla derretida, paso bloqueado`
+                            : undefined
+                        }
                         onClick={() => chooseSquare(s)}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => {
@@ -1097,7 +1234,10 @@ function App() {
                           const from = e.dataTransfer.getData("text/plain");
                           if (!activeGame || !myTurn || busy) return;
                           const ms = moves.filter(
-                            (m) => m.from === from && m.to === s,
+                            (m) =>
+                              m.from === from &&
+                              m.to === s &&
+                              (!mustSwap || m.piece === swapPiece),
                           );
                           if (ms.length) {
                             if (ms[0].promotion) setPromotion(ms);
@@ -1117,6 +1257,7 @@ function App() {
                               activeGame &&
                               myTurn &&
                               p.color === game.turn &&
+                              (!mustSwap || !!swapPiece) &&
                               !busy
                             }
                             onDragStart={(e) => {
@@ -1124,6 +1265,7 @@ function App() {
                                 !activeGame ||
                                 !myTurn ||
                                 p.color !== game.turn ||
+                                (mustSwap && !swapPiece) ||
                                 busy
                               ) {
                                 e.preventDefault();
@@ -1144,7 +1286,7 @@ function App() {
                   })}
                 </div>
               </div>
-              {isRenacer && (
+              {(isRenacer || isVolcan) && (
                 <ReserveBar
                   color={flipped ? "b" : "w"}
                   reserves={displayedReserves}
@@ -1153,14 +1295,40 @@ function App() {
                     activeGame &&
                     myTurn &&
                     !busy &&
+                    (!isVolcan || mustSwap) &&
                     game.turn === (flipped ? "b" : "w")
                   }
-                  selected={selection}
+                  selected={
+                    isVolcan ? (swapPiece ? "@" + swapPiece : null) : selection
+                  }
+                  canDrag={!isVolcan}
+                  eliminated={isVolcan}
+                  lockedReason={
+                    isVolcan
+                      ? "Solo puedes sustituir si no tienes movimientos legales"
+                      : null
+                  }
                   onSelect={chooseReserve}
                   reviewing={isAnalysis}
                 />
               )}
               <Player color={flipped ? "b" : "w"} />
+              {isVolcan && mustSwap && activeGame && (
+                <div className="swap-alert">
+                  <ShieldAlert size={18} />
+                  <div>
+                    <strong>Sin movimientos: activa un relevo.</strong>
+                    <p>
+                      {!swapPiece
+                        ? "1. Elige una pieza de tus eliminadas."
+                        : !selection
+                          ? `2. Elige qué pieza del tablero sustituir por ${PIECE_NAMES[swapPiece].toLowerCase()}.`
+                          : `3. Mueve el nuevo ${PIECE_NAMES[swapPiece].toLowerCase()} desde ${selection} a una casilla marcada.`}{" "}
+                      La sustitución y el movimiento son una sola acción.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="board-toolbar">
                 <div className="turn-status">
                   <span className={"status-dot " + (busy ? "pulse" : "")} />
@@ -1199,6 +1367,11 @@ function App() {
                       {isRenacer && selection?.startsWith("@") && (
                         <span className="turn-counter reserve-counter">
                           Coloca {PIECE_NAMES[selection[1]]?.toLowerCase()}
+                        </span>
+                      )}
+                      {isVolcan && mustSwap && (
+                        <span className="turn-counter volcano-counter">
+                          Sustituir y mover
                         </span>
                       )}
                       {isDice && (
@@ -1312,7 +1485,9 @@ function App() {
                 }
               >
                 <span className="rule-icon">
-                  {isRenacer ? (
+                  {isVolcan ? (
+                    <Flame size={18} />
+                  ) : isRenacer ? (
                     <RefreshCcw size={18} />
                   ) : isDice ? (
                     <Dices size={18} />
@@ -1323,7 +1498,20 @@ function App() {
                   )}
                 </span>
                 <p>
-                  {isRenacer ? (
+                  {isVolcan ? (
+                    <>
+                      <strong>
+                        {last?.eruption
+                          ? `La lava consumió ${last.eruption.square}.`
+                          : "Cada pareja de jugadas, una erupción."}
+                      </strong>{" "}
+                      {last?.eruption?.piece
+                        ? `${last.eruption.piece.type === "k" ? "Rey" : PIECE_NAMES[last.eruption.piece.type]} ${last.eruption.piece.color === "w" ? "blanco" : "negro"} perdido. `
+                        : ""}
+                      La lava bloquea movimientos y ataques. Solo el caballo
+                      puede saltarla.
+                    </>
+                  ) : isRenacer ? (
                     <>
                       <strong>
                         {selection?.startsWith("@")
@@ -1383,6 +1571,18 @@ function App() {
               </div>
             </section>
             <aside className="game-panel">
+              {isVolcan && (
+                <VolcanoPanel
+                  terrain={displayedVolcano}
+                  last={displayedVolcano.last}
+                  reviewing={isAnalysis}
+                  showDanger={showDanger}
+                  toggleDanger={() => setShowDanger((v) => !v)}
+                  onRules={() => setModal("rules-volcan")}
+                  turn={displayTurn}
+                  mustSwap={mustSwap && !isAnalysis}
+                />
+              )}
               {isRenacer && !isAnalysis && (
                 <section className="panel-card reserve-intro">
                   <div className="panel-heading">
@@ -1442,7 +1642,7 @@ function App() {
                   <section
                     className={
                       "panel-card setup-panel" +
-                      ((isDice || isRenacer) && started
+                      ((isDice || isRenacer || isVolcan) && started
                         ? " dice-setup-active"
                         : "")
                     }
@@ -1488,7 +1688,9 @@ function App() {
                                     ? "3"
                                     : isRenacer
                                       ? "4"
-                                      : "2"}
+                                      : isVolcan
+                                        ? "5"
+                                        : "2"}
                               </span>
                             </h3>
                             <p>{variant.role}</p>
@@ -1500,7 +1702,11 @@ function App() {
                                   ? "STOCKFISH + DADOS"
                                   : isRenacer
                                     ? "STOCKFISH + RESERVAS"
-                                    : "STOCKFISH + ADAPTADOR"}
+                                    : isVolcan
+                                      ? game.volcano.melted.length
+                                        ? "MOTOR DE TERRENO"
+                                        : "STOCKFISH + TERRENO"
+                                      : "STOCKFISH + ADAPTADOR"}
                             </div>
                           </div>
                           <img
@@ -1740,17 +1946,36 @@ function App() {
                     </div>
                     <div>
                       <strong>
-                        {game.history.filter((h) => h.captured).length}
+                        {game.history.filter((h) => h.captured).length +
+                          (isVolcan
+                            ? game.history.filter((h) => h.eruption?.piece)
+                                .length
+                            : 0)}
                       </strong>
-                      <span>{isDice ? "Capturas / retiros" : "Capturas"}</span>
+                      <span>
+                        {isVolcan
+                          ? "Capturas / lava"
+                          : isDice
+                            ? "Capturas / retiros"
+                            : "Capturas"}
+                      </span>
                     </div>
                     <div>
                       <strong>
-                        {isRenacer
-                          ? game.history.filter((h) => h.kind === "drop").length
-                          : groups.length}
+                        {isVolcan
+                          ? game.volcano.eruptions
+                          : isRenacer
+                            ? game.history.filter((h) => h.kind === "drop")
+                                .length
+                            : groups.length}
                       </strong>
-                      <span>{isRenacer ? "Recolocaciones" : "Turnos"}</span>
+                      <span>
+                        {isVolcan
+                          ? "Erupciones"
+                          : isRenacer
+                            ? "Recolocaciones"
+                            : "Turnos"}
+                      </span>
                     </div>
                   </div>
                   <div className="chart-heading">
@@ -1825,10 +2050,14 @@ function App() {
                   {analysisScore?.fen === displayFen && (
                     <div className="evaluation">
                       <strong>
-                        {analysisScore.score?.type === "mate"
-                          ? (isRenacer ? "Mate clásico " : "Mate ") +
-                            analysisScore.score.value
-                          : (analysisScore.score?.value / 100).toFixed(2)}
+                        {analysisScore.outcome
+                          ? analysisScore.outcome.winner === null
+                            ? "Tablas"
+                            : `Ganan ${analysisScore.outcome.winner === "w" ? "blancas" : "negras"}`
+                          : analysisScore.score?.type === "mate"
+                            ? (isRenacer ? "Mate clásico " : "Mate ") +
+                              analysisScore.score.value
+                            : (analysisScore.score?.value / 100).toFixed(2)}
                       </strong>
                       <span>
                         Desde el lado que mueve ·{" "}
@@ -1841,11 +2070,13 @@ function App() {
                   <p className="analysis-warning">
                     {game.variant === "comecome"
                       ? "Evaluación real de Fairy-Stockfish con bloqueo configurado como tablas."
-                      : isRenacer
-                        ? "Evaluación clásica orientativa: no tiene en cuenta las reservas. Puede señalar un mate que una colocación legal evite. No es la ventaja exacta de Renacer."
-                        : isDice
-                          ? "Evaluación clásica orientativa. No calcula las probabilidades de futuras tiradas ni las extracciones del dado; no es la ventaja exacta de Azar."
-                          : "Evaluación orientativa de ajedrez clásico. Stockfish no entiende los turnos múltiples; no representa la ventaja real de esta variante."}
+                      : isVolcan
+                        ? "Evaluación orientativa del adaptador: respeta el terreno actual y las sustituciones. No predice qué casilla desaparecerá ni calcula todas las erupciones futuras. No es una puntuación nativa de Stockfish."
+                        : isRenacer
+                          ? "Evaluación clásica orientativa: no tiene en cuenta las reservas. Puede señalar un mate que una colocación legal evite. No es la ventaja exacta de Renacer."
+                          : isDice
+                            ? "Evaluación clásica orientativa. No calcula las probabilidades de futuras tiradas ni las extracciones del dado; no es la ventaja exacta de Azar."
+                            : "Evaluación orientativa de ajedrez clásico. Stockfish no entiende los turnos múltiples; no representa la ventaja real de esta variante."}
                   </p>
                 </section>
               )}
@@ -1888,7 +2119,12 @@ function App() {
                               }
                               key={m.i}
                               onClick={() => {
-                                return;
+                                if (isRunning) {
+                                  notify(
+                                    "El historial se podrá explorar al finalizar.",
+                                  );
+                                  return;
+                                }
                                 setView("analysis");
                                 setReview(m.i);
                               }}
@@ -1906,6 +2142,15 @@ function App() {
                                 </span>
                               )}
                               {m.san}
+                              {isVolcan && m.eruption && (
+                                <span
+                                  className="history-eruption"
+                                  title={`Erupción ${m.eruption.number}${m.eruption.piece ? " · pieza perdida" : ""}`}
+                                >
+                                  <Flame size={11} />
+                                  {m.eruption.square}
+                                </span>
+                              )}
                               {(game.variant === "correlativo" || isDice) && (
                                 <small>
                                   {m.step}/{m.budget}
@@ -1924,9 +2169,11 @@ function App() {
                       ? "Capturas obligatorias"
                       : isDice
                         ? "Tiradas y extracciones guardadas"
-                        : isRenacer
-                          ? "Capturas a tu propia reserva"
-                          : "Turnos progresivos"}
+                        : isVolcan
+                          ? "Erupciones y terreno guardados"
+                          : isRenacer
+                            ? "Capturas a tu propia reserva"
+                            : "Turnos progresivos"}
                   </span>
                   <button
                     disabled={!game.history.length}
@@ -2308,6 +2555,7 @@ function App() {
   );
 }
 function Rules({ variant }) {
+  if (variant === "volcan") return <VolcanoRules />;
   if (variant === "renacer") return <RenacerRules />;
   if (variant === "azar") return <DiceRules />;
   return (
@@ -2540,7 +2788,7 @@ function DiceTray({
         <div className="dice-action-note">
           <span className="status-dot" />
           {game.result
-            ? "Partida terminada. Descarga el PGN o juega otra vez."
+            ? "Explora la partida en el análisis."
             : d.phase === "remove"
               ? myTurn
                 ? "Selecciona una pieza rival marcada en el tablero."
@@ -2677,6 +2925,9 @@ function ReserveBar({
   selected,
   onSelect,
   reviewing,
+  canDrag = true,
+  eliminated = false,
+  lockedReason = null,
 }) {
   const total = reserveCount(reserves, color);
   return (
@@ -2687,13 +2938,23 @@ function ReserveBar({
       <div className="reserve-label">
         <PackageOpen size={15} />
         <div>
-          <strong>{color === "w" ? "Reserva blanca" : "Reserva negra"}</strong>
+          <strong>
+            {eliminated
+              ? color === "w"
+                ? "Eliminadas blancas"
+                : "Eliminadas negras"
+              : color === "w"
+                ? "Reserva blanca"
+                : "Reserva negra"}
+          </strong>
           <span>
             {total
               ? `${total} ${total === 1 ? "pieza disponible" : "piezas disponibles"}`
               : reviewing
                 ? "Sin piezas en reserva"
-                : "Tus piezas capturadas volverán aquí"}
+                : eliminated
+                  ? "Lava y capturas · solo para relevos"
+                  : "Tus piezas capturadas volverán aquí"}
           </span>
         </div>
       </div>
@@ -2714,11 +2975,11 @@ function ReserveBar({
                 !count
                   ? `${PIECE_NAMES[p]}: todavía no hay ninguno en tu reserva`
                   : active
-                    ? `Colocar ${PIECE_NAMES[p].toLowerCase()}`
-                    : "Disponible cuando te toque jugar"
+                    ? `${eliminated ? "Sustituir por" : "Colocar"} ${PIECE_NAMES[p].toLowerCase()}`
+                    : lockedReason || "Disponible cuando te toque jugar"
               }
               onClick={() => onSelect(color, p)}
-              draggable={active && count > 0}
+              draggable={canDrag && active && count > 0}
               onDragStart={(e) => {
                 e.dataTransfer.setData("text/plain", "@" + p);
                 onSelect(color, p);
@@ -2812,6 +3073,229 @@ function RenacerRules() {
         alfiles del mismo color porque pueden recolocarse. El PGN usa notación
         extendida, como N@f3, y comentarios de reserva. JSON conserva el estado
         completo.
+      </p>
+    </div>
+  );
+}
+
+function VolcanoPanel({
+  terrain,
+  last,
+  reviewing,
+  showDanger,
+  toggleDanger,
+  onRules,
+  turn,
+  mustSwap,
+}) {
+  const phase = volcanoPhase(terrain.eruptions),
+    rows = volcanoRanks(terrain.eruptions);
+  return (
+    <section className="panel-card volcano-panel">
+      <div className="panel-heading">
+        <h2>
+          <Flame size={17} /> Pulso del volcán
+        </h2>
+        <button
+          className="icon-button"
+          title="Reglas de Volcán"
+          onClick={onRules}
+        >
+          <CircleHelp size={15} />
+        </button>
+      </div>
+      <div className="volcano-scene">
+        <svg viewBox="0 0 160 100" aria-hidden="true">
+          <defs>
+            <radialGradient id="lavaGlow">
+              <stop stopColor="#f59847" stopOpacity=".65" />
+              <stop offset="1" stopColor="#ed501f" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id="lavaMountain" x1="0" y1="0" x2="1" y2="1">
+              <stop stopColor="#514238" />
+              <stop offset="1" stopColor="#181a17" />
+            </linearGradient>
+          </defs>
+          <ellipse cx="80" cy="44" rx="64" ry="47" fill="url(#lavaGlow)" />
+          <path
+            d="M2 94 54 40 69 47 82 38 99 45 155 94Z"
+            fill="url(#lavaMountain)"
+            stroke="#976247"
+            strokeWidth=".8"
+          />
+          <path
+            d="m54 40 15 7 13-9 17 7-12 10-4 16-11 7-3 16"
+            fill="none"
+            stroke="#f59651"
+            strokeWidth="3"
+          />
+          <path
+            d="m87 55 12 12 3 13 17 14"
+            fill="none"
+            stroke="#d55e34"
+            strokeWidth="2"
+          />
+          <path
+            d="M72 32q-15-15 3-27M88 30q15-12 5-23"
+            fill="none"
+            stroke="#9e6c4c"
+            strokeWidth="3"
+            opacity=".4"
+          />
+          <circle cx="69" cy="28" r="1.5" fill="#f5a157" />
+          <circle cx="96" cy="23" r="1" fill="#f5a157" />
+        </svg>
+        <div>
+          <span className="volcano-kicker">
+            {reviewing ? "TERRENO EN REVISIÓN" : "EL TERRENO TAMBIÉN JUEGA"}
+          </span>
+          <h3>
+            {terrain.eruptions
+              ? `${terrain.eruptions} ${terrain.eruptions === 1 ? "erupción" : "erupciones"}`
+              : "La calma es temporal."}
+          </h3>
+          <p>{terrain.melted.length} / 64 casillas perdidas</p>
+        </div>
+      </div>
+      <div className="volcano-phases">
+        {["4–5", "3–6", "2–7", "1–8"].map((r, i) => (
+          <div
+            key={r}
+            className={phase === i ? "active " : phase > i ? "complete " : ""}
+          >
+            <span>FASE {["I", "II", "III", "IV"][i]}</span>
+            <strong>{r}</strong>
+            <small>
+              {i === 3
+                ? "desde la 13"
+                : "erup. " + (i * 4 + 1) + "–" + (i * 4 + 4)}
+            </small>
+          </div>
+        ))}
+      </div>
+      <div className="eruption-clock">
+        <span className="status-dot" />
+        <p>
+          {reviewing
+            ? "Zona de la siguiente erupción"
+            : mustSwap
+              ? "Relevo de emergencia disponible"
+              : turn === "b"
+                ? "La próxima jugada activará la lava."
+                : "La lava llegará después de mover negras."}
+          <strong>
+            Filas {rows[0]}–{rows.at(-1)} · casilla aleatoria
+          </strong>
+        </p>
+      </div>
+      {last && (
+        <div className="latest-eruption">
+          <span>
+            <Flame size={15} />
+            Última: <b>{last.square}</b>
+          </span>
+          <small>
+            {last.piece
+              ? `${last.piece.type === "k" ? "Rey" : PIECE_NAMES[last.piece.type]} ${last.piece.color === "w" ? "blanco" : "negro"} perdido`
+              : "Sin pieza en esa casilla"}
+          </small>
+        </div>
+      )}
+      <label className="terrain-toggle">
+        <input type="checkbox" checked={showDanger} onChange={toggleDanger} />
+        Mostrar zona de erupción<span>●</span>
+      </label>
+    </section>
+  );
+}
+function VolcanoRules() {
+  return (
+    <div className="rules-content volcano-rules">
+      <div>
+        <span>01</span>
+        <section>
+          <h3>Una erupción por pareja de jugadas.</h3>
+          <p>
+            Primero juegan blancas y negras. Después se derrite una casilla
+            aleatoria que siga intacta. Erupciones 1–4: filas 4 y 5; 5–8: filas
+            3–6; 9–12: filas 2–7; desde la 13: cualquier fila. No se elige una
+            casilla que ya esté derretida.
+          </p>
+        </section>
+      </div>
+      <div>
+        <span>02</span>
+        <section>
+          <h3>La lava deja una barrera permanente.</h3>
+          <p>
+            No puedes ocupar ni atravesar una casilla derretida. Bloquea las
+            líneas de torres, alfiles y damas, también sus ataques, y el avance
+            de peones. El caballo puede saltarla, pero no caer en ella. El
+            enroque exige todo el recorrido intacto.
+          </p>
+        </section>
+      </div>
+      <div>
+        <span>03</span>
+        <section>
+          <h3>Si cae tu rey, pierdes.</h3>
+          <p>
+            La pieza que esté en la casilla desaparece. Si es el rey, su
+            propietario pierde inmediatamente. Las demás pasan a las eliminadas
+            de su propietario, igual que las piezas capturadas por el rival. El
+            resultado se comprueba después de la erupción: la lava puede cortar
+            un jaque o retirar a quien lo daba.
+          </p>
+        </section>
+      </div>
+      <div>
+        <span>04</span>
+        <section>
+          <h3>Sin movimientos, un último relevo.</h3>
+          <p>
+            Solo si no tienes ninguna jugada legal puedes sustituir una pieza
+            propia del tablero —nunca el rey— por una de tus eliminadas y mover
+            inmediatamente la nueva pieza. Ambas cosas forman una sola acción.
+            Elige primero la pieza eliminada, después la que reemplazas y por
+            último el destino.
+          </p>
+          <p>
+            La pieza sustituida pasa a tus eliminadas. No se cambia por el mismo
+            tipo ni se sustituye por un peón en las filas 1 u 8. Las promociones
+            mantienen su tipo actual. La nueva pieza debe moverse legalmente y
+            dejar a salvo tu rey. No es una recolocación libre como en Renacer.
+          </p>
+        </section>
+      </div>
+      <div className="rules-note">
+        <ShieldAlert size={18} />
+        <p>
+          Si tampoco existe una sustitución con movimiento legal, es{" "}
+          <strong>jaque mate</strong> cuando tu rey está en jaque y{" "}
+          <strong>tablas</strong> cuando no lo está. No hay tablas automáticas
+          por material insuficiente: incluso con reyes solos, la lava puede
+          decidir la partida.
+        </p>
+      </div>
+      <div className="rules-note">
+        <Cpu size={18} />
+        <p>
+          IGNIS usa un adaptador experimental de terreno. Stockfish orienta la
+          apertura mientras no hay casillas derretidas; después, un buscador
+          específico respeta las barreras y las sustituciones. No predice la
+          próxima casilla aleatoria ni tiene Elo certificado. El análisis usa
+          ese adaptador, no una evaluación clásica que ignore la lava.
+        </p>
+      </div>
+      <p className="rules-small">
+        Se mantienen promociones, captura al paso y enroque cuando el terreno lo
+        permite. La erupción borra el derecho al paso si destruye su destino o
+        el peón correspondiente; perder una torre inicial anula ese enroque. Las
+        sustituciones y las pérdidas por lava reinician el contador de 50
+        movimientos. Triple repetición incluye terreno, fase y eliminadas.
+        Deshacer y revisar restauran los eventos registrados; si vuelves a
+        jugar, la nueva erupción se sortea de nuevo. PGN extendido con
+        comentarios de lava; JSON guarda el estado completo.
       </p>
     </div>
   );

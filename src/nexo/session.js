@@ -1,7 +1,7 @@
 import { validateFen } from "chess.js";
 import { boardFromFen, RESERVE_TYPES } from "./rules.js";
 export const SESSION_KEY = "nexo-session-v1";
-const variants = ["comecome", "correlativo", "azar", "renacer"];
+const variants = ["comecome", "correlativo", "azar", "renacer", "volcan"];
 function validFen(fen, variant) {
   if (
     typeof fen !== "string" ||
@@ -28,7 +28,7 @@ function validFen(fen, variant) {
     boardFromFen(fen).length !== 64
   )
     return false;
-  return variant === "comecome" || validateFen(fen).ok;
+  return variant === "comecome" || variant === "volcan" || validateFen(fen).ok;
 }
 export function validSessionGame(g) {
   if (
@@ -68,7 +68,7 @@ export function validSessionGame(g) {
       typeof g.result.reason !== "string")
   )
     return false;
-  if (g.variant === "renacer") {
+  if (["renacer", "volcan"].includes(g.variant)) {
     const validReserve = (r) =>
       r &&
       ["w", "b"].every(
@@ -84,6 +84,49 @@ export function validSessionGame(g) {
       g.history.some(
         (h) =>
           !validReserve(h.reservesBefore) || !validReserve(h.reservesAfter),
+      )
+    )
+      return false;
+  }
+  if (g.variant === "volcan") {
+    const validTerrain = (v, fen) => {
+      if (
+        !v ||
+        !Array.isArray(v.melted) ||
+        v.melted.length > 64 ||
+        new Set(v.melted).size !== v.melted.length ||
+        !Number.isInteger(v.eruptions) ||
+        v.eruptions < v.melted.length ||
+        v.eruptions > 10000 ||
+        v.melted.some((s) => typeof s !== "string" || !/^[a-h][1-8]$/.test(s))
+      )
+        return false;
+      const board = boardFromFen(fen);
+      if (
+        v.melted.some(
+          (s) => board[(8 - Number(s[1])) * 8 + "abcdefgh".indexOf(s[0])],
+        )
+      )
+        return false;
+      return ["w", "b"].every(
+        (c) =>
+          board.filter((p) => p?.type === "k" && p.color === c).length <= 1,
+      );
+    };
+    if (
+      !validTerrain(g.volcano, g.fen) ||
+      g.history.some(
+        (h) =>
+          !validTerrain(h.volcanoBefore, h.before) ||
+          !validTerrain(h.volcanoAfter, h.fen),
+      )
+    )
+      return false;
+    if (
+      !g.result &&
+      ["w", "b"].some(
+        (c) =>
+          !boardFromFen(g.fen).some((p) => p?.type === "k" && p.color === c),
       )
     )
       return false;

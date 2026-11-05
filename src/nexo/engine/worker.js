@@ -11,6 +11,8 @@ import {
   values,
   RESERVE_TYPES,
 } from "../rules.js";
+import { meltCandidates, volcanoInCheck, volcanoOutcome } from "../volcano.js";
+import { validSessionGame } from "../session.js";
 
 const VARIANTS_INI =
   "[comecome:antichess]\nstalemateValue = draw\nstalematePieceCount = false\npromotionPieceTypes = nbrqk\n";
@@ -64,9 +66,9 @@ function evaluate(s, color) {
     return s.result.winner === color ? 100000 : s.result.winner === null ? 0 : -100000;
   const mat = material(s.fen);
   let v = mat[color] - mat[other(color)];
-  if (s.variant === "renacer")
+  if (["renacer", "volcan"].includes(s.variant))
     for (const p of RESERVE_TYPES)
-      v += 0.75 * values[p] * ((s.reserves[color][p] || 0) - (s.reserves[other(color)][p] || 0));
+      v += (s.variant === "volcan" ? 0.3 : 0.75) * values[p] * ((s.reserves[color][p] || 0) - (s.reserves[other(color)][p] || 0));
   const b = boardFromFen(s.fen);
   b.forEach((p, i) => {
     if (p && p.type !== "k") {
@@ -74,6 +76,15 @@ function evaluate(s, color) {
       v += (p.color === color ? 1 : -1) * center * 4;
     }
   });
+  if (s.variant === "volcan") {
+    const risk = new Set(meltCandidates(s));
+    for (let i = 0; i < 64; i++) {
+      const p = b[i];
+      if (p?.type === "k" && risk.has("abcdefgh"[i % 8] + (8 - Math.floor(i / 8))))
+        v += (p.color === color ? -1 : 1) * 150;
+    }
+    if (volcanoInCheck(s)) v += s.turn === color ? -25 : 25;
+  }
   return v;
 }
 
@@ -177,19 +188,94 @@ function renacerChoice(state, hint, level, legal) {
   }
   return uci(choice);
 }
+// Volcán: same search as original server.js (terrain-aware, own rules).
+function volcanoChoice(state, hint, level) {
+  const moves = legalMoves(state);
+  if (!moves.length) return null;
+  const color = state.turn,
+    deadline = Date.now() + [100, 300, 650, 1100][level - 1],
+    depth = [1, 2, 3, 4][level - 1];
+  const order = (ms) =>
+    ms.sort(
+      (a, b) =>
+        (b.captured ? values[b.captured] + 1000 : 0) +
+        (b.promotion ? 700 : 0) -
+        ((a.captured ? values[a.captured] + 1000 : 0) +
+          (a.promotion ? 700 : 0)),
+    );
+  function search(s, d, a, b) {
+    if (!d || s.result || Date.now() > deadline) return evaluate(s, color);
+    let best = s.turn === color ? -Infinity : Infinity;
+    const ms = order(legalMoves(s));
+    for (const m of ms) {
+      const n = applyMove(s, m, true),
+        v = search(n, d - 1, a, b);
+      if (s.turn === color) {
+        best = Math.max(best, v);
+        a = Math.max(a, best);
+      } else {
+        best = Math.min(best, v);
+        b = Math.min(b, best);
+      }
+      if (b <= a || Date.now() > deadline) break;
+    }
+    return Number.isFinite(best) ? best : evaluate(s, color);
+  }
+  const ranked = order(moves)
+    .map((m) => {
+      const next = applyMove(state, m, true);
+      return {
+        m,
+        next,
+        score:
+          evaluate(next, color) +
+          (uci(m) === hint ? 15 : 0) +
+          (level === 1 ? Math.random() * 65 : 0),
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+  if (level === 1 || ranked[0].next.result?.winner === color)
+    return uci(ranked[0].m);
+  let best = -Infinity,
+    choice = ranked[0].m;
+  for (const candidate of ranked.slice(0, 24)) {
+    const score =
+      search(candidate.next, depth - 1, -Infinity, Infinity) +
+      (uci(candidate.m) === hint ? 15 : 0);
+    if (score > best) {
+      best = score;
+      choice = candidate.m;
+    }
+    if (Date.now() > deadline) break;
+  }
+  return uci(choice);
+}
 async function move({ state, level = 2 }) {
   if (
     !state ||
-    !["comecome", "correlativo", "azar", "renacer"].includes(state.variant) ||
+    !["comecome", "correlativo", "azar", "renacer", "volcan"].includes(state.variant) ||
     typeof state.fen !== "string" ||
     !Number.isInteger(level) ||
     level < 1 ||
     level > 4
   )
     throw new Error("Posición no válida");
+  if (state.variant === "volcan" && !validSessionGame({ ...state, history: [], positions: [] }))
+    throw new Error("Terreno o piezas eliminadas no válidos");
   const legal = legalMoves(state),
     moves = legal.map(uci);
   if (!moves.length) return { move: null };
+  if (state.variant === "volcan") {
+    let hint = null;
+    if (!state.volcano.melted.length && legal.every((m) => m.kind !== "swap"))
+      hint = (await engine({ fen: state.fen, variant: "volcan", level, moves })).move;
+    const mv = volcanoChoice({ ...state, history: [], positions: [] }, hint, level);
+    return {
+      move: mv,
+      engine: state.volcano.melted.length ? "Buscador de terreno Volcán" : "Stockfish + adaptador de terreno",
+      experimental: true,
+    };
+  }
   if (state.variant === "azar" && state.dice?.phase === "remove") {
     let best = -Infinity,
       choice = legal[0];
@@ -244,10 +330,22 @@ self.onmessage = async ({ data }) => {
     let result;
     if (type === "move") result = await move(payload);
     else {
-      const { fen, variant } = payload;
-      if (typeof fen !== "string" || !["comecome", "correlativo", "azar", "renacer"].includes(variant))
+      const { fen, variant, state } = payload;
+      if (typeof fen !== "string" || !["comecome", "correlativo", "azar", "renacer", "volcan"].includes(variant))
         throw new Error("Posición no válida");
-      result = await engine({ fen, variant, analysis: true });
+      if (variant === "volcan") {
+        if (!state || state.fen !== fen || state.variant !== variant || !validSessionGame({ ...state, history: [], positions: [] }))
+          throw new Error("Falta el terreno válido para analizar esta posición");
+        const outcome = volcanoOutcome({ ...state, result: null });
+        const assessed = { ...state, result: outcome, history: [], positions: [] };
+        result = {
+          score: { type: "cp", value: Math.round(evaluate(assessed, state.turn)) },
+          move: outcome ? null : volcanoChoice(assessed, null, 2),
+          outcome,
+          evaluationKind: "terrain",
+          experimental: true,
+        };
+      } else result = await engine({ fen, variant, analysis: true });
     }
     self.postMessage({ id, result });
   } catch (e) {
