@@ -11,7 +11,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y Volcán, con NYX, KAIRO, VEGA e IRIS.",
+          "Cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y Volcán, con NYX, KAIRO, VEGA, IRIS e IGNIS.",
       },
       { property: "og:title", content: "Evolution Chess — Ajedrez, sin límites" },
       {
