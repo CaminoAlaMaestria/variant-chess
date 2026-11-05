@@ -729,7 +729,7 @@ function App() {
                   positions: [],
                 },
               }
-            : undefined));
+            : undefined);
       setAnalysisScore({ ...data, fen: displayFen });
     } catch (e) {
       notify(e.message);
