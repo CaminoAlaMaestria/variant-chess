@@ -38,7 +38,8 @@ function pos(
     ...initial("volcan"),
     fen,
     turn: fen.split(" ")[1],
-    turnIndex: fen.split(" ")[1] === "b" ? 1 : 0,
+    // next ply triggers an eruption (every 3rd move)
+    turnIndex: fen.split(" ")[1] === "b" ? 5 : 2,
     reserves,
     volcano: { ...freshVolcano(), melted: holes, eruptions },
   };
@@ -50,33 +51,44 @@ test("Initial Volcán has twenty normal moves and no missing squares", () => {
   assert.equal(s.positions[0], volcanoPositionKey(s));
   assert.ok(validSessionGame(s));
 });
-test("An eruption occurs after black, never after white", () => {
+test("An eruption occurs after every third move, alternating halves", () => {
   let s = applyMove(initial("volcan"), "e2e4");
+  s = applyMove(s, "e7e5");
   assert.equal(s.volcano.eruptions, 0);
-  s = applyVolcanoAction(s, "e7e5", false, "a4");
+  s = applyVolcanoAction(s, "g1f3", false, "a4");
   assert.equal(s.volcano.eruptions, 1);
   assert.deepEqual(s.volcano.melted, ["a4"]);
-  s = applyMove(s, "g1f3");
+  assert.deepEqual(meltCandidates(s).map((x) => x[1]).sort()[0], "5");
+  s = applyMove(s, "b8c6");
+  s = applyMove(s, "f1c4");
   assert.equal(s.volcano.eruptions, 1);
-  assert.equal(s.history[2].eruption, null);
+  assert.throws(() => applyVolcanoAction(s, "g8f6", false, "b4"));
+  s = applyVolcanoAction(s, "g8f6", false, "b5");
+  assert.equal(s.volcano.eruptions, 2);
+  assert.equal(s.history[2].eruption.square, "a4");
+  assert.equal(s.history[3].eruption, null);
 });
-test("Phase boundaries count four pairs, not four individual moves", () => {
+test("Phases change every six eruptions", () => {
   assert.deepEqual(
-    [0, 3, 4, 7, 8, 11, 12, 16, 40].map(volcanoPhase),
-    [0, 0, 1, 1, 2, 2, 3, 3, 3],
+    [0, 5, 6, 11, 12, 17, 18, 40].map(volcanoPhase),
+    [0, 0, 1, 1, 2, 2, 3, 3],
   );
   assert.deepEqual(volcanoRanks(0), [4, 5]);
-  assert.deepEqual(volcanoRanks(4), [3, 4, 5, 6]);
-  assert.deepEqual(volcanoRanks(8), [2, 3, 4, 5, 6, 7]);
-  assert.equal(volcanoRanks(12).length, 8);
+  assert.deepEqual(volcanoRanks(6), [3, 4, 5, 6]);
+  assert.deepEqual(volcanoRanks(12), [2, 3, 4, 5, 6, 7]);
+  assert.equal(volcanoRanks(18).length, 8);
 });
 test("Melt candidates include occupied squares, exclude old holes and wrong ranks", () => {
   let s = applyMove(initial("volcan"), "e2e4");
+  s = applyMove(s, "e7e5");
   assert.ok(meltCandidates(s).includes("e4"));
+  assert.ok(!meltCandidates(s).includes("e5"));
   assert.ok(!meltCandidates(s).includes("e1"));
-  s = applyVolcanoAction(s, "e7e5", false, "e4");
+  assert.equal(meltCandidates(s).length, 8);
+  s = applyVolcanoAction(s, "g1f3", false, "e4");
   assert.ok(!meltCandidates(s).includes("e4"));
-  assert.equal(meltCandidates(s).length, 15);
+  assert.equal(meltCandidates(s).length, 8);
+  assert.ok(meltCandidates(s).every((x) => x[1] === "5"));
   assert.throws(() =>
     applyVolcanoAction(
       { ...s, turn: "b", fen: s.fen.replace(" w ", " b ") },
@@ -87,18 +99,18 @@ test("Melt candidates include occupied squares, exclude old holes and wrong rank
   );
 });
 test("Real random eruption is recorded and selects one eligible square", () => {
-  const before = applyMove(initial("volcan"), "e2e4"),
-    after = applyMove(before, "e7e5");
+  const before = applyMove(applyMove(initial("volcan"), "e2e4"), "e7e5"),
+    after = applyMove(before, "g1f3");
   assert.equal(after.volcano.melted.length, 1);
-  assert.ok(meltCandidates(before).includes(after.history[1].eruption.square));
+  assert.ok(meltCandidates(before).includes(after.history[2].eruption.square));
 });
 test("Melting a piece removes it and adds it to its own eliminated pool", () => {
-  let s = applyMove(initial("volcan"), "e2e4");
-  s = applyVolcanoAction(s, "e7e5", false, "e4");
+  let s = applyMove(applyMove(initial("volcan"), "e2e4"), "e7e5");
+  s = applyVolcanoAction(s, "g1f3", false, "e4");
   assert.equal(boardFromFen(s.fen)[index("e4")], null);
   assert.equal(s.reserves.w.p, 1);
   assert.equal(s.reserves.b.p, 0);
-  assert.equal(s.history[1].eruption.piece.color, "w");
+  assert.equal(s.history[2].eruption.piece.color, "w");
   assert.ok(validSessionGame(s));
 });
 test("Ordinary captures are also recoverable by the victim", () => {
@@ -186,13 +198,13 @@ test("Volcano supports promotion and en passant", () => {
 });
 test("Eruption clears en passant if its target or the moved pawn disappears", () => {
   for (const at of ["e5", "e6"]) {
-    let s = pos("7k/4p3/8/8/8/8/8/7K b - - 0 1", [], {}, {}, 4);
+    let s = pos("7k/4p3/8/8/8/8/8/7K b - - 0 1", [], {}, {}, 7);
     s = applyVolcanoAction(s, "e7e5", false, at);
     assert.equal(s.fen.split(" ")[3], "-");
   }
 });
 test("Melting a home rook removes castling rights", () => {
-  let s = pos("4k2r/8/8/8/8/8/8/7K b k - 0 1", [], {}, {}, 12);
+  let s = pos("4k2r/8/8/8/8/8/8/7K b k - 0 1", [], {}, {}, 19);
   s = applyVolcanoAction(s, "e8d8", false, "h8");
   assert.equal(s.fen.split(" ")[2], "-");
   assert.equal(s.reserves.b.r, 1);
@@ -202,7 +214,7 @@ test("Molten king loses immediately, including the king of the moving side", () 
     ["a1", "b"],
     ["g8", "w"],
   ]) {
-    let s = pos("7k/8/8/8/8/8/8/K7 b - - 0 1", [], {}, {}, 12);
+    let s = pos("7k/8/8/8/8/8/8/K7 b - - 0 1", [], {}, {}, at === "a1" ? 18 : 19);
     s = applyVolcanoAction(s, "h8g8", false, at);
     assert.equal(s.result.winner, winner);
     assert.match(s.result.reason, /lava/);
@@ -212,7 +224,7 @@ test("Molten king loses immediately, including the king of the moving side", () 
   }
 });
 test("The eruption is adjudicated before mate, and can cut a checking line", () => {
-  let s = pos("8/2b5/8/8/8/5k2/r7/7K b - - 0 1", [], {}, {}, 12);
+  let s = pos("8/2b5/8/8/8/5k2/r7/7K b - - 0 1", [], {}, {}, 18);
   s = applyVolcanoAction(s, "a2a1", false, "e1");
   assert.ok(new Chess(s.fen).isCheckmate());
   assert.ok(!inCheck(s));
@@ -270,29 +282,29 @@ test("Bare kings are not an insufficient-material draw in a volcano", () => {
   assert.equal(s.result, null);
 });
 test("Undo and deterministic replay restore the recorded terrain and pools", () => {
-  let s = applyMove(initial("volcan"), "e2e4");
-  s = applyVolcanoAction(s, "e7e5", false, "e4");
-  s = applyMove(s, "g1f3");
-  const replay = rewindVolcano(s, 3);
+  let s = applyMove(applyMove(initial("volcan"), "e2e4"), "e7e5");
+  s = applyVolcanoAction(s, "g1f3", false, "e4");
+  s = applyMove(s, "b8c6");
+  const replay = rewindVolcano(s, 4);
   assert.equal(replay.fen, s.fen);
   assert.deepEqual(replay.volcano, s.volcano);
   assert.deepEqual(replay.reserves, s.reserves);
-  const before = rewindVolcano(s, 1);
+  const before = rewindVolcano(s, 2);
   assert.equal(before.volcano.melted.length, 0);
   assert.equal(before.reserves.w.p, 0);
 });
 test("Search simulation does not roll a random eruption or mutate original state", () => {
-  const s = applyMove(initial("volcan"), "e2e4"),
+  const s = applyMove(applyMove(initial("volcan"), "e2e4"), "e7e5"),
     raw = JSON.stringify(s);
-  const next = applyMove(s, "e7e5", true);
+  const next = applyMove(s, "g1f3", true);
   assert.deepEqual(next.volcano.melted, []);
   assert.equal(next.volcano.eruptions, 1);
   assert.equal(JSON.stringify(s), raw);
 });
 test("Export and session preserve lava events and detect occupied melted squares", () => {
-  let s = applyMove(initial("volcan"), "e2e4");
-  s = applyVolcanoAction(s, "e7e5", false, "e4");
-  assert.match(pgn(s), /Variant "Volcán"/);
+  let s = applyMove(applyMove(initial("volcan"), "e2e4"), "e7e5");
+  s = applyVolcanoAction(s, "g1f3", false, "e4");
+  assert.match(pgn(s), /Variant "El suelo es lava"/);
   assert.match(pgn(s), /Erupción 1: e4/);
   assert.match(pgn(s), /pierde wP/);
   assert.ok(validSessionGame(JSON.parse(JSON.stringify(s))));
