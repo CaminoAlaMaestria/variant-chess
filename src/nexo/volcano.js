@@ -39,7 +39,19 @@ export function freshVolcano() {
   return { melted: [], eruptions: 0, last: null };
 }
 export function volcanoPhase(eruptions) {
-  return Math.min(3, Math.floor(eruptions / 4));
+  return Math.min(3, Math.floor(eruptions / 6));
+}
+// Lava erupts after every 3rd move (ply). turnIndex counts plies already played.
+export const ERUPTION_EVERY = 3;
+export function eruptsAfter(turnIndex) {
+  return (turnIndex + 1) % ERUPTION_EVERY === 0;
+}
+export function movesUntilEruption(turnIndex) {
+  return ERUPTION_EVERY - (turnIndex % ERUPTION_EVERY);
+}
+// Eruptions alternate halves: even -> ranks 1-4, odd -> ranks 5-8.
+export function volcanoHalf(eruptions) {
+  return eruptions % 2 === 0 ? [1, 2, 3, 4] : [5, 6, 7, 8];
 }
 export function volcanoRanks(eruptions) {
   return [
@@ -51,10 +63,13 @@ export function volcanoRanks(eruptions) {
 }
 export function meltCandidates(state) {
   const rows = volcanoRanks(state.volcano.eruptions),
-    holes = new Set(state.volcano.melted);
-  return Array.from({ length: 64 }, (_, i) => square(i)).filter(
-    (s) => rows.includes(Number(s[1])) && !holes.has(s),
-  );
+    half = volcanoHalf(state.volcano.eruptions),
+    holes = new Set(state.volcano.melted),
+    open = Array.from({ length: 64 }, (_, i) => square(i)).filter(
+      (s) => rows.includes(Number(s[1])) && !holes.has(s),
+    ),
+    inHalf = open.filter((s) => half.includes(Number(s[1])));
+  return inHalf.length ? inHalf : open;
 }
 function randomChoice(items) {
   if (!items.length) return null;
@@ -414,7 +429,7 @@ export function applyVolcanoAction(
     reserves[raw.taken.color][raw.taken.type]++;
   let eruption = null,
     result = null;
-  if (state.turn === "b") {
+  if (eruptsAfter(state.turnIndex)) {
     const candidates = meltCandidates(state);
     if (!fast) {
       if (

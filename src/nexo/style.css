@@ -4984,3 +4984,84 @@ select:disabled {
     max-width: min(750px, max(340px, calc(100dvh - 380px)));
   }
 }
+
+/* ---- El suelo es lava: aviso, erupción animada y relevo lento ---- */
+.lava-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f7c9a3;
+  background: rgba(237, 80, 31, 0.12);
+  border: 1px solid rgba(237, 80, 31, 0.35);
+}
+.lava-warning-hot {
+  color: #fff1e6;
+  background: rgba(237, 80, 31, 0.32);
+  border-color: #ed501f;
+  animation: lava-warn-pulse 900ms ease-in-out infinite;
+}
+@keyframes lava-warn-pulse {
+  50% { box-shadow: 0 0 18px rgba(237, 80, 31, 0.55); }
+}
+.square.eruption-imminent {
+  animation: lava-row-warn 1s ease-in-out infinite;
+}
+@keyframes lava-row-warn {
+  50% { box-shadow: inset 0 0 0 3px rgba(245, 120, 50, 0.85), inset 0 0 18px rgba(237, 80, 31, 0.6); }
+}
+.board-frame.lava-quake {
+  animation: lava-quake 2s linear;
+}
+@keyframes lava-quake {
+  0%, 100% { transform: translate(0, 0); }
+  5% { transform: translate(-4px, 2px) rotate(-0.4deg); }
+  10% { transform: translate(4px, -2px) rotate(0.4deg); }
+  15% { transform: translate(-5px, -1px); }
+  20% { transform: translate(5px, 2px) rotate(-0.3deg); }
+  30% { transform: translate(-3px, 1px); }
+  40% { transform: translate(3px, -2px) rotate(0.3deg); }
+  50% { transform: translate(-2px, 2px); }
+  60% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, 1px); }
+  90% { transform: translate(1px, 0); }
+}
+.square.lava-pending {
+  position: relative;
+  animation: lava-rise 2s ease-in forwards;
+}
+@keyframes lava-rise {
+  0% { box-shadow: inset 0 0 0 0 rgba(237, 80, 31, 0); }
+  40% { box-shadow: inset 0 0 14px 4px rgba(245, 150, 70, 0.8); }
+  100% { box-shadow: inset 0 0 40px 30px rgba(237, 80, 31, 0.95); background: #7a2310; }
+}
+.square .melting-piece {
+  position: absolute;
+  inset: 6%;
+  width: 88%;
+  height: 88%;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  animation: piece-melt 2s ease-in forwards;
+  z-index: 2;
+}
+@keyframes piece-melt {
+  0% { transform: rotate(0) scaleY(1); filter: none; opacity: 1; }
+  25% { transform: rotate(-18deg) scaleY(1); filter: sepia(0.6) saturate(3) hue-rotate(-20deg); }
+  50% { transform: rotate(32deg) translateY(4%) scaleY(0.85); filter: sepia(1) saturate(5) hue-rotate(-30deg) brightness(1.3); }
+  80% { transform: rotate(70deg) translateY(18%) scaleY(0.4) scaleX(1.25); filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(1.6); opacity: 0.8; }
+  100% { transform: rotate(90deg) translateY(40%) scaleY(0.05) scaleX(1.4); opacity: 0; }
+}
+.square.swap-fx {
+  animation: swap-fx 1s ease-in-out infinite;
+}
+@keyframes swap-fx {
+  50% { box-shadow: inset 0 0 0 4px #f5a157, inset 0 0 22px rgba(245, 161, 87, 0.7); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-frame.lava-quake { animation: none; }
+}
