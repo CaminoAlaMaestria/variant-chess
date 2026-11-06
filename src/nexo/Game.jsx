@@ -72,6 +72,8 @@ import {
   freshVolcano,
   volcanoPhase,
   volcanoRanks,
+  volcanoHalf,
+  movesUntilEruption,
   meltCandidates,
   rewindVolcano,
 } from "./volcano.js";
@@ -123,7 +125,7 @@ const VARIANTS = {
     accent: "cyan",
   },
   volcan: {
-    name: "Volcán",
+    name: "El suelo es lava",
     tag: "EL TERRENO TAMBIÉN JUEGA.",
     desc: "Sobrevive a un tablero que desaparece.",
     character: "IGNIS",
@@ -240,7 +242,9 @@ function App() {
     [toast, setToast] = useState(""),
     [selection, setSelection] = useState(null),
     [promotion, setPromotion] = useState(null),
-    [busy, setBusy] = useState(false),
+    [busyState, setBusy] = useState(false),
+    [lavaFx, setLavaFx] = useState(null),
+    [swapFx, setSwapFx] = useState(null),
     [engineError, setEngineError] = useState(""),
     [hint, setHint] = useState(null),
     [review, setReview] = useState(-1),
@@ -259,6 +263,10 @@ function App() {
     [swapPiece, setSwapPiece] = useState(null),
     [showDanger, setShowDanger] = useState(true);
   const diceTimer = useRef(null);
+  const frozen = !!lavaFx || !!swapFx,
+    busy = busyState || frozen,
+    lavaUntil = useRef(0),
+    lavaLen = useRef(game.history.length);
   const gameRef = useRef(game),
     requestId = useRef(0),
     historyRef = useRef(null);
@@ -386,6 +394,19 @@ function App() {
     }, 650);
   }
   useEffect(() => () => clearTimeout(diceTimer.current), []);
+  // Eruption show: the lava takes 2 s to appear; the piece tips and melts and
+  // the board shakes. Bot, input and clocks wait until it ends.
+  useEffect(() => {
+    const len = game.history.length,
+      grew = len > lavaLen.current;
+    lavaLen.current = len;
+    const e = game.history.at(-1)?.eruption;
+    if (!grew || game.variant !== "volcan" || !e || isAnalysis) return;
+    lavaUntil.current = Date.now() + 2000;
+    setLavaFx({ ...e, key: len });
+    const t = setTimeout(() => setLavaFx(null), 2000);
+    return () => clearTimeout(t);
+  }, [game.history.length]);
   function execute(m) {
     const current = gameRef.current;
     if (current.result || !started) return;
@@ -420,6 +441,22 @@ function App() {
         if (id !== requestId.current) return;
         const m = legalMoves(gameRef.current).find((x) => uci(x) === data.move);
         if (!m) throw new Error("No se pudo validar la jugada.");
+        const lavaWait = lavaUntil.current - Date.now();
+        if (lavaWait > 0) await sleep(lavaWait, controller.signal);
+        if (id !== requestId.current) return;
+        if (m.kind === "swap") {
+          // Slow emergency swap so the player can see what happened.
+          setSwapFx({ from: m.from, piece: m.piece, swapFrom: m.swapFrom });
+          notify(
+            `${variant.character} no puede mover: cambia su ${PIECE_NAMES[m.swapFrom].toLowerCase()} de ${m.from} por ${PIECE_NAMES[m.piece].toLowerCase()}.`,
+          );
+          try {
+            await sleep(2000, controller.signal);
+          } finally {
+            setSwapFx(null);
+          }
+          if (id !== requestId.current) return;
+        }
         execute(m);
       } catch (e) {
         if (e.name !== "AbortError" && id === requestId.current)
@@ -437,7 +474,7 @@ function App() {
     };
   }, [game, activeGame, mode, myTurn, level, retry]);
   useEffect(() => {
-    if (!isRunning || !time || engineError) return;
+    if (!isRunning || !time || engineError || frozen) return;
     let prev = Date.now();
     const interval = setInterval(() => {
       const now = Date.now(),
@@ -449,7 +486,7 @@ function App() {
       }));
     }, 200);
     return () => clearInterval(interval);
-  }, [game.turn, isRunning, time, engineError]);
+  }, [game.turn, isRunning, time, engineError, frozen]);
   useEffect(() => {
     if (isRunning && time && clocks[game.turn] <= 0)
       setGame((g) => ({
@@ -504,6 +541,9 @@ function App() {
   }, [isAnalysis, game.history.length]);
   function reset(v = game.variant) {
     requestId.current++;
+    setLavaFx(null);
+    setSwapFx(null);
+    lavaUntil.current = 0;
     clearTimeout(diceTimer.current);
     setRolling(false);
     setRemoval(null);
@@ -570,6 +610,7 @@ function App() {
     setSelection((x) => (x === "@" + piece ? null : "@" + piece));
   }
   function chooseSquare(s) {
+    if (frozen) return;
     if (!activeGame || !myTurn || busy || rolling) return;
     if (isVolcan && molten.has(s)) {
       notify("Esta casilla se ha derretido: no se puede ocupar ni atravesar.");
@@ -1109,7 +1150,7 @@ function App() {
               </span>
               <div>
                 <div className="variant-name">
-                  Volcán <span className="variant-badge">NUEVA</span>
+                  El suelo es lava <span className="variant-badge">NUEVA</span>
                 </div>
                 <p>El terreno también juega.</p>
               </div>
@@ -1157,7 +1198,10 @@ function App() {
                   reviewing={isAnalysis}
                 />
               )}
-              <div className="board-frame">
+              {isVolcan && activeGame && (
+                <LavaWarning game={game} fx={lavaFx} swapFx={swapFx} />
+              )}
+              <div className={"board-frame" + (lavaFx ? " lava-quake" : "")}>
                 <div
                   className="chessboard"
                   role="grid"
@@ -1166,6 +1210,7 @@ function App() {
                   {Array.from({ length: 64 }, (_, k) => {
                     const i = flipped ? 63 - k : k,
                       s = square(i),
+                      lavaPending = lavaFx?.square === s,
                       p = board[i],
                       r = Math.floor(i / 8),
                       c = i % 8,
@@ -1191,9 +1236,17 @@ function App() {
                           (selection === s && !isAnalysis
                             ? " selected-square"
                             : "") +
-                          (isVolcan && molten.has(s) ? " molten-square" : "") +
+                          (isVolcan && molten.has(s) && !lavaPending
+                            ? " molten-square"
+                            : "") +
+                          (lavaPending ? " lava-pending" : "") +
+                          (swapFx?.from === s ? " swap-fx" : "") +
                           (isVolcan && dangerSquares.has(s)
-                            ? " eruption-zone"
+                            ? " eruption-zone" +
+                              (activeGame &&
+                              movesUntilEruption(game.turnIndex) === 1
+                                ? " eruption-imminent"
+                                : "")
                             : "") +
                           (isVolcan && last?.eruption?.square === s
                             ? " last-eruption"
@@ -1250,6 +1303,13 @@ function App() {
                         )}
                         {k >= 56 && (
                           <span className="file-label">{"abcdefgh"[c]}</span>
+                        )}
+                        {lavaPending && lavaFx.piece && (
+                          <img
+                            className="melting-piece"
+                            src={`/pieces/${pieces}/${lavaFx.piece.color}${lavaFx.piece.type.toUpperCase()}.svg`}
+                            alt=""
+                          />
                         )}
                         {p && (
                           <img
@@ -3078,6 +3138,54 @@ function RenacerRules() {
   );
 }
 
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(t);
+      reject(new DOMException("Aborted", "AbortError"));
+    });
+  });
+}
+function zoneLabel(terrain) {
+  const half = volcanoHalf(terrain.eruptions),
+    rows = meltCandidates({ volcano: terrain })
+      .map((x) => Number(x[1]))
+      .filter((r, i, a) => a.indexOf(r) === i)
+      .sort();
+  if (!rows.length) return "Sin casillas libres";
+  const which = half[0] === 1 ? "mitad baja" : "mitad alta";
+  return (
+    (rows.length === 1 ? "Fila " + rows[0] : "Filas " + rows.join(", ")) +
+    " (" +
+    which +
+    ")"
+  );
+}
+function LavaWarning({ game, fx, swapFx }) {
+  const n = movesUntilEruption(game.turnIndex);
+  let text;
+  if (fx)
+    text = fx.piece
+      ? `¡Erupción en ${fx.square}! La pieza se derrite…`
+      : `¡Erupción en ${fx.square}!`;
+  else if (swapFx) text = "Relevo de emergencia en curso…";
+  else if (n === 1)
+    text = `¡Atención! Tras esta jugada se romperá una casilla: ${zoneLabel(game.volcano)}. Aparta tus piezas.`;
+  else
+    text = `Próxima erupción en ${n} jugadas · ${zoneLabel(game.volcano)}.`;
+  return (
+    <div
+      className={
+        "lava-warning" + (fx || n === 1 ? " lava-warning-hot" : "")
+      }
+      role="status"
+    >
+      <Flame size={16} />
+      <span>{text}</span>
+    </div>
+  );
+}
 function VolcanoPanel({
   terrain,
   last,
@@ -3087,6 +3195,7 @@ function VolcanoPanel({
   onRules,
   turn,
   mustSwap,
+  untilLava,
 }) {
   const phase = volcanoPhase(terrain.eruptions),
     rows = volcanoRanks(terrain.eruptions);
@@ -3094,11 +3203,11 @@ function VolcanoPanel({
     <section className="panel-card volcano-panel">
       <div className="panel-heading">
         <h2>
-          <Flame size={17} /> Pulso del volcán
+          <Flame size={17} /> Pulso de la lava
         </h2>
         <button
           className="icon-button"
-          title="Reglas de Volcán"
+          title="Reglas de El suelo es lava"
           onClick={onRules}
         >
           <CircleHelp size={15} />
@@ -3167,8 +3276,8 @@ function VolcanoPanel({
             <strong>{r}</strong>
             <small>
               {i === 3
-                ? "desde la 13"
-                : "erup. " + (i * 4 + 1) + "–" + (i * 4 + 4)}
+                ? "desde la 19"
+                : "erup. " + (i * 6 + 1) + "–" + (i * 6 + 6)}
             </small>
           </div>
         ))}
@@ -3180,11 +3289,11 @@ function VolcanoPanel({
             ? "Zona de la siguiente erupción"
             : mustSwap
               ? "Relevo de emergencia disponible"
-              : turn === "b"
-                ? "La próxima jugada activará la lava."
-                : "La lava llegará después de mover negras."}
+              : untilLava === 1
+                ? "¡La próxima jugada activará la lava!"
+                : `La lava llegará en ${untilLava} jugadas.`}
           <strong>
-            Filas {rows[0]}–{rows.at(-1)} · casilla aleatoria
+            {zoneLabel(terrain)} · casilla aleatoria
           </strong>
         </p>
       </div>
@@ -3214,12 +3323,14 @@ function VolcanoRules() {
       <div>
         <span>01</span>
         <section>
-          <h3>Una erupción por pareja de jugadas.</h3>
+          <h3>Una erupción cada 3 jugadas.</h3>
           <p>
-            Primero juegan blancas y negras. Después se derrite una casilla
-            aleatoria que siga intacta. Erupciones 1–4: filas 4 y 5; 5–8: filas
-            3–6; 9–12: filas 2–7; desde la 13: cualquier fila. No se elige una
-            casilla que ya esté derretida.
+            Cada tres movimientos se derrite una casilla aleatoria que siga
+            intacta. Las erupciones alternan mitades del tablero: una en las
+            filas 1–4 y la siguiente en las filas 5–8. Erupciones 1–6: filas 4 y
+            5; 7–12: filas 3–6; 13–18: filas 2–7; desde la 19: cualquier fila.
+            Antes de cada erupción se avisa de la fila amenazada para que puedas
+            apartar tus piezas.
           </p>
         </section>
       </div>
