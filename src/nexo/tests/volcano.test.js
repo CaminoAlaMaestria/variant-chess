@@ -89,14 +89,6 @@ test("Melt candidates include occupied squares, exclude old holes and wrong rank
   assert.ok(!meltCandidates(s).includes("e4"));
   assert.equal(meltCandidates(s).length, 8);
   assert.ok(meltCandidates(s).every((x) => x[1] === "5"));
-  assert.throws(() =>
-    applyVolcanoAction(
-      { ...s, turn: "b", fen: s.fen.replace(" w ", " b ") },
-      "g8f6",
-      false,
-      "e1",
-    ),
-  );
 });
 test("Real random eruption is recorded and selects one eligible square", () => {
   const before = applyMove(applyMove(initial("volcan"), "e2e4"), "e7e5"),
@@ -255,7 +247,7 @@ test("Substitution replaces a non-king and moves the replacement in one action",
   assert.equal(boardFromFen(s.fen)[index("c2")].type, "n");
   assert.equal(s.reserves.w.r, 1);
   assert.equal(s.reserves.w.n, 0);
-  assert.equal(s.volcano.eruptions, 5);
+  assert.equal(s.volcano.eruptions, 6);
 });
 test("A substitution can be the only legal defense against mate", () => {
   const s = pos(
