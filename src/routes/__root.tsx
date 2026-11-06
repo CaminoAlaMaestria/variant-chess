@@ -82,12 +82,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: "Evolution Chess — Ajedrez, sin límites" },
       {
         name: "description",
-        content: "Cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y Volcán.",
+        content: "Cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y El suelo es lava.",
       },
       { property: "og:title", content: "Evolution Chess — Ajedrez, sin límites" },
       {
         property: "og:description",
-        content: "Cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y Volcán.",
+        content: "Cinco variantes de ajedrez: Come-come, Correlativo, Azar, Renacer y El suelo es lava.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

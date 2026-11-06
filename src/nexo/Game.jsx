@@ -296,7 +296,8 @@ function App() {
     : game.volcano || freshVolcano();
   const molten = new Set(displayedVolcano.melted);
   const dangerSquares =
-    isVolcan && showDanger
+    isVolcan &&
+    (showDanger || (!isAnalysis && movesUntilEruption(game.turnIndex) === 1))
       ? new Set(meltCandidates({ volcano: displayedVolcano }))
       : new Set();
   const last = isAnalysis ? reviewed : game.history.at(-1),
@@ -1563,7 +1564,7 @@ function App() {
                       <strong>
                         {last?.eruption
                           ? `La lava consumió ${last.eruption.square}.`
-                          : "Cada pareja de jugadas, una erupción."}
+                          : "Cada 3 jugadas, una erupción."}
                       </strong>{" "}
                       {last?.eruption?.piece
                         ? `${last.eruption.piece.type === "k" ? "Rey" : PIECE_NAMES[last.eruption.piece.type]} ${last.eruption.piece.color === "w" ? "blanco" : "negro"} perdido. `
@@ -1641,6 +1642,7 @@ function App() {
                   onRules={() => setModal("rules-volcan")}
                   turn={displayTurn}
                   mustSwap={mustSwap && !isAnalysis}
+                  untilLava={movesUntilEruption(game.turnIndex)}
                 />
               )}
               {isRenacer && !isAnalysis && (
