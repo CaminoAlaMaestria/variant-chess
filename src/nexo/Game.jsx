@@ -1571,7 +1571,7 @@ function App() {
                       <strong>
                         {last?.eruption
                           ? `La lava consumió ${last.eruption.square}.`
-                          : "Cada 3 jugadas, una erupción."}
+                          : `Cada ${game.volcano?.every || 3} jugadas, una erupción.`}
                       </strong>{" "}
                       {last?.eruption?.piece
                         ? `${last.eruption.piece.type === "k" ? "Rey" : PIECE_NAMES[last.eruption.piece.type]} ${last.eruption.piece.color === "w" ? "blanco" : "negro"} perdido. `
@@ -3359,7 +3359,7 @@ function VolcanoRules() {
       <div>
         <span>01</span>
         <section>
-          <h3>Una erupción cada 3 jugadas.</h3>
+          <h3>Una erupción cada 3 o 5 jugadas (tú eliges).</h3>
           <p>
             Cada tres movimientos se derrite una casilla aleatoria que siga
             intacta. Las erupciones alternan mitades del tablero: una en las
