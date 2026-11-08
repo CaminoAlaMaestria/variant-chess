@@ -249,20 +249,6 @@ test("Substitution replaces a non-king and moves the replacement in one action",
   assert.equal(s.reserves.w.n, 0);
   assert.equal(s.volcano.eruptions, 6);
 });
-test.skip("(old rule) A substitution can be the only legal defense against mate", () => {
-  const s = pos(
-    "7k/8/8/8/8/2R5/8/r6K w - - 0 1",
-    ["c2", "c4", "b3", "d3", "g2", "h2"],
-    { n: 1 },
-  );
-  assert.ok(inCheck(s));
-  assert.equal(volcanoOutcome(s), null);
-  assert.ok(legalMoves(s).some((m) => uci(m) === "N~c3d1"));
-  const next = applyMove(s, "N~c3d1");
-  assert.ok(!inCheck({ ...next, turn: "w" }));
-  const without = { ...s, reserves: freshReserves() };
-  assert.equal(volcanoOutcome(without).winner, "b");
-});
 test("No moves or usable replacements means stalemate when not in check", () => {
   const s = pos("7k/8/8/8/8/8/8/7K w - - 0 1", ["g1", "g2", "h2"], { q: 1 });
   assert.deepEqual(legalMoves(s), []);

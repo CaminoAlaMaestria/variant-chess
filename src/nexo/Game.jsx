@@ -3400,7 +3400,7 @@ function VolcanoRules() {
         <section>
           <h3>Sin movimientos, un último relevo.</h3>
           <p>
-            Solo si no tienes ninguna jugada legal puedes sustituir una pieza
+            Solo si no tienes ninguna jugada legal y no estás en jaque puedes sustituir una pieza
             propia del tablero —nunca el rey— por una de tus eliminadas y mover
             inmediatamente la nueva pieza. Ambas cosas forman una sola acción.
             Elige primero la pieza eliminada, después la que reemplazas y por
