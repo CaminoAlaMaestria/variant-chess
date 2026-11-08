@@ -3361,11 +3361,11 @@ function VolcanoRules() {
         <section>
           <h3>Una erupción cada 3 o 5 jugadas (tú eliges).</h3>
           <p>
-            Cada tres movimientos se derrite una casilla aleatoria que siga
+            Cada tres (o cinco) movimientos se derrite una casilla aleatoria que siga
             intacta. Las erupciones alternan mitades del tablero: una en las
             filas 1–4 y la siguiente en las filas 5–8. Erupciones 1–6: filas 4 y
             5; 7–12: filas 3–6; 13–18: filas 2–7; desde la 19: cualquier fila.
-            Antes de cada erupción se avisa de la fila amenazada para que puedas
+            Dos jugadas antes de cada erupción se avisa de la fila amenazada para que puedas
             apartar tus piezas.
           </p>
         </section>

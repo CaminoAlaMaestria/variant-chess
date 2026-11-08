@@ -249,7 +249,7 @@ test("Substitution replaces a non-king and moves the replacement in one action",
   assert.equal(s.reserves.w.n, 0);
   assert.equal(s.volcano.eruptions, 6);
 });
-test("A substitution can be the only legal defense against mate", () => {
+test.skip("(old rule) A substitution can be the only legal defense against mate", () => {
   const s = pos(
     "7k/8/8/8/8/2R5/8/r6K w - - 0 1",
     ["c2", "c4", "b3", "d3", "g2", "h2"],
@@ -303,4 +303,24 @@ test("Export and session preserve lava events and detect occupied melted squares
   assert.ok(
     !validSessionGame({ ...s, volcano: { ...s.volcano, melted: ["e5"] } }),
   );
+});
+test("In check there is no emergency substitution: it is mate", () => {
+  // White king h1 in check from a1 rook; only defense would be a substitution.
+  const s = pos(
+    "7k/8/8/8/8/2R5/8/r6K w - - 0 1",
+    ["c2", "c4", "b3", "d3", "g2", "h2"],
+    { n: 1 },
+  );
+  assert.ok(inCheck(s));
+  assert.deepEqual(legalMoves(s), []);
+  assert.equal(volcanoOutcome(s).winner, "b");
+});
+test("Eruption frequency can be every 5 moves", () => {
+  let s = initial("volcan");
+  s.volcano = freshVolcano(5);
+  for (const m of ["e2e4", "e7e5", "g1f3"]) s = applyMove(s, m);
+  assert.equal(s.volcano.eruptions, 0);
+  s = applyMove(s, "b8c6");
+  s = applyVolcanoAction(s, "f1c4", false, "a4");
+  assert.equal(s.volcano.eruptions, 1);
 });
