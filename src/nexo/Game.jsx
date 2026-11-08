@@ -74,6 +74,7 @@ import {
   volcanoRanks,
   volcanoHalf,
   movesUntilEruption,
+  WARNING_PLIES,
   meltCandidates,
   rewindVolcano,
 } from "./volcano.js";
@@ -261,7 +262,8 @@ function App() {
     [rolling, setRolling] = useState(false),
     [removal, setRemoval] = useState(null),
     [swapPiece, setSwapPiece] = useState(null),
-    [showDanger, setShowDanger] = useState(true);
+    [showDanger, setShowDanger] = useState(false),
+    [lavaEvery, setLavaEvery] = useState(saved?.game?.volcano?.every || 3);
   const diceTimer = useRef(null);
   const frozen = !!lavaFx || !!swapFx,
     busy = busyState || frozen,
@@ -295,9 +297,10 @@ function App() {
     ? reviewed?.volcanoAfter || freshVolcano()
     : game.volcano || freshVolcano();
   const molten = new Set(displayedVolcano.melted);
+  const untilLava = movesUntilEruption(game.turnIndex, game.volcano?.every);
   const dangerSquares =
     isVolcan &&
-    (showDanger || (!isAnalysis && movesUntilEruption(game.turnIndex) === 1))
+    (showDanger || (!isAnalysis && untilLava <= WARNING_PLIES))
       ? new Set(meltCandidates({ volcano: displayedVolcano }))
       : new Set();
   const last = isAnalysis ? reviewed : game.history.at(-1),
@@ -548,7 +551,11 @@ function App() {
     clearTimeout(diceTimer.current);
     setRolling(false);
     setRemoval(null);
-    setGame(initial(v));
+    {
+      const fresh = initial(v);
+      if (v === "volcan") fresh.volcano = freshVolcano(lavaEvery);
+      setGame(fresh);
+    }
     setStarted(false);
     setSelection(null);
     setSwapPiece(null);
@@ -1245,7 +1252,7 @@ function App() {
                           (isVolcan && dangerSquares.has(s)
                             ? " eruption-zone" +
                               (activeGame &&
-                              movesUntilEruption(game.turnIndex) === 1
+                              untilLava <= WARNING_PLIES
                                 ? " eruption-imminent"
                                 : "")
                             : "") +
@@ -1642,7 +1649,14 @@ function App() {
                   onRules={() => setModal("rules-volcan")}
                   turn={displayTurn}
                   mustSwap={mustSwap && !isAnalysis}
-                  untilLava={movesUntilEruption(game.turnIndex)}
+                  untilLava={untilLava}
+                  every={game.volcano?.every || 3}
+                  canChangeEvery={!game.history.length}
+                  setEvery={(n) => {
+                    setLavaEvery(n);
+                    if (!game.history.length)
+                      setGame((g) => ({ ...g, volcano: { ...g.volcano, every: n } }));
+                  }}
                 />
               )}
               {isRenacer && !isAnalysis && (
@@ -3165,7 +3179,7 @@ function zoneLabel(terrain) {
   );
 }
 function LavaWarning({ game, fx, swapFx }) {
-  const n = movesUntilEruption(game.turnIndex);
+  const n = movesUntilEruption(game.turnIndex, game.volcano?.every);
   let text;
   if (fx)
     text = fx.piece
@@ -3174,12 +3188,14 @@ function LavaWarning({ game, fx, swapFx }) {
   else if (swapFx) text = "Relevo de emergencia en curso…";
   else if (n === 1)
     text = `¡Atención! Tras esta jugada se romperá una casilla: ${zoneLabel(game.volcano)}. Aparta tus piezas.`;
+  else if (n <= WARNING_PLIES)
+    text = `¡Aviso! En ${n} jugadas se romperá una casilla: ${zoneLabel(game.volcano)}. Aparta tus piezas.`;
   else
     text = `Próxima erupción en ${n} jugadas · ${zoneLabel(game.volcano)}.`;
   return (
     <div
       className={
-        "lava-warning" + (fx || n === 1 ? " lava-warning-hot" : "")
+        "lava-warning" + (fx || n <= WARNING_PLIES ? " lava-warning-hot" : "")
       }
       role="status"
     >
@@ -3198,6 +3214,9 @@ function VolcanoPanel({
   turn,
   mustSwap,
   untilLava,
+  every,
+  canChangeEvery,
+  setEvery,
 }) {
   const phase = volcanoPhase(terrain.eruptions),
     rows = volcanoRanks(terrain.eruptions);
@@ -3312,6 +3331,21 @@ function VolcanoPanel({
           </small>
         </div>
       )}
+      <div className="lava-every" role="group" aria-label="Frecuencia de la lava">
+        <span>Erupción cada</span>
+        {[3, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            className={every === n ? "active" : ""}
+            aria-pressed={every === n}
+            onClick={() => setEvery(n)}
+            title={canChangeEvery ? "" : "Se aplicará en la próxima partida"}
+          >
+            {n} jugadas
+          </button>
+        ))}
+      </div>
       <label className="terrain-toggle">
         <input type="checkbox" checked={showDanger} onChange={toggleDanger} />
         Mostrar zona de erupción<span>●</span>
