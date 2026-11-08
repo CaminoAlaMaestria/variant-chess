@@ -5065,3 +5065,8 @@ select:disabled {
 @media (prefers-reduced-motion: reduce) {
   .board-frame.lava-quake { animation: none; }
 }
+
+.lava-every { display: flex; align-items: center; gap: 6px; margin: 10px 0 4px; font-size: 11px; color: #c7ab8c; }
+.lava-every > span { margin-right: auto; }
+.lava-every button { padding: 5px 10px; border-radius: 6px; border: 1px solid #6c4e32; background: #2c241b; color: #c7ab8c; font-size: 11px; cursor: pointer; }
+.lava-every button.active { background: #513522; border-color: #bf8653; color: #ffd7a8; }

@@ -35,19 +35,23 @@ const KNIGHT = [
   [2, -1],
   [2, 1],
 ];
-export function freshVolcano() {
-  return { melted: [], eruptions: 0, last: null };
+export function freshVolcano(every = ERUPTION_EVERY) {
+  return { melted: [], eruptions: 0, last: null, every: every === 5 ? 5 : 3 };
 }
 export function volcanoPhase(eruptions) {
   return Math.min(3, Math.floor(eruptions / 6));
 }
 // Lava erupts after every 3rd move (ply). turnIndex counts plies already played.
 export const ERUPTION_EVERY = 3;
-export function eruptsAfter(turnIndex) {
-  return (turnIndex + 1) % ERUPTION_EVERY === 0;
+export const ERUPTION_OPTIONS = [3, 5];
+// Lava warning is shown this many plies before the eruption.
+export const WARNING_PLIES = 2;
+const everyOf = (every) => (every === 5 ? 5 : ERUPTION_EVERY);
+export function eruptsAfter(turnIndex, every) {
+  return (turnIndex + 1) % everyOf(every) === 0;
 }
-export function movesUntilEruption(turnIndex) {
-  return ERUPTION_EVERY - (turnIndex % ERUPTION_EVERY);
+export function movesUntilEruption(turnIndex, every) {
+  return everyOf(every) - (turnIndex % everyOf(every));
 }
 // Eruptions alternate halves: even -> ranks 1-4, odd -> ranks 5-8.
 export function volcanoHalf(eruptions) {
@@ -344,6 +348,9 @@ export function volcanoLegalMoves(state) {
   );
   if (normal.length)
     return normal.map((m) => ({ ...m, san: notation(m, normal) }));
+  // In check there is no emergency substitution: escape normally or it is mate.
+  if (terrainAttacked(b, holes, b.findIndex((p) => p?.type === "k" && p.color === state.turn), other(state.turn)))
+    return [];
   const swaps = [];
   for (let i = 0; i < 64; i++) {
     const old = b[i];
@@ -429,7 +436,7 @@ export function applyVolcanoAction(
     reserves[raw.taken.color][raw.taken.type]++;
   let eruption = null,
     result = null;
-  if (eruptsAfter(state.turnIndex)) {
+  if (eruptsAfter(state.turnIndex, state.volcano.every)) {
     const candidates = meltCandidates(state);
     if (!fast) {
       if (
@@ -550,6 +557,7 @@ export function applyVolcanoAction(
 }
 export function rewindVolcano(state, length) {
   let g = initial("volcan");
+  g.volcano = freshVolcano(state.volcano?.every);
   for (const h of state.history.slice(0, length))
     g = applyVolcanoAction(g, h, false, h.eruption?.square ?? null);
   return g;
