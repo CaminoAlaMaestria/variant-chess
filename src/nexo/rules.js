@@ -6,6 +6,7 @@ import {
   applyVolcanoAction,
   volcanoPositionKey,
 } from "./volcano.js";
+import { freshWet, wetLegalMoves, wetInCheck, applyWetAction } from "./wet.js";
 export const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 export const other = (c) => (c === "w" ? "b" : "w");
 export const square = (i) => "abcdefgh"[i % 8] + (8 - Math.floor(i / 8));
@@ -56,9 +57,13 @@ export function initial(variant = "comecome") {
       ? { reserves: freshReserves() }
       : {}),
     ...(variant === "volcan" ? { volcano: freshVolcano() } : {}),
+    ...(variant === "mojado" ? { wet: freshWet() } : {}),
     history: [],
     result: null,
     positions: [
+      variant === "mojado"
+        ? fen.split(" ").slice(0, 3).join(" ") + "|ep=null"
+        :
       fen.split(" ").slice(0, 4).join(" ") +
         (variant === "comecome"
           ? ""
@@ -176,6 +181,7 @@ export function legalMoves(state) {
   if (state.variant === "azar") return diceLegalMoves(state);
   if (state.variant === "renacer") return renacerMoves(state);
   if (state.variant === "volcan") return volcanoLegalMoves(state);
+  if (state.variant === "mojado") return wetLegalMoves(state);
   try {
     const chess = new Chess(state.fen);
     return chess
@@ -207,6 +213,7 @@ export function uci(m) {
 export function inCheck(state) {
   if (state.variant === "comecome") return false;
   if (state.variant === "volcan") return volcanoInCheck(state);
+  if (state.variant === "mojado") return wetInCheck(state);
   try {
     return new Chess(state.fen).isCheck();
   } catch {
@@ -215,6 +222,7 @@ export function inCheck(state) {
 }
 export function applyMove(state, input, fast = false) {
   if (state.variant === "volcan") return applyVolcanoAction(state, input, fast);
+  if (state.variant === "mojado") return applyWetAction(state, input, fast);
   if (state.variant === "azar") return applyDiceAction(state, input, fast);
   if (state.variant === "renacer")
     return applyRenacerAction(state, input, fast);
@@ -372,7 +380,9 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
   const name =
     state.variant === "comecome"
       ? "Come-come"
-      : state.variant === "volcan"
+      : state.variant === "mojado"
+        ? "Suelo mojado"
+        : state.variant === "volcan"
         ? "El suelo es lava"
         : state.variant === "renacer"
           ? "Renacer"
@@ -398,7 +408,9 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
     "{ " +
     (state.variant === "comecome"
       ? "Captura obligatoria. Rey no real. Sin enroque. Bloqueo = tablas."
-      : state.variant === "volcan"
+      : state.variant === "mojado"
+        ? "PGN extendido Suelo mojado: ~ separa destino inicial y final tras resbalar. Caballo prolonga el tramo largo; rey y peón una casilla extra; torres, alfiles y damas hasta el límite. Capturar frena. Obstáculo propio o borde dejan la última casilla libre. Enroque desplazado; al paso tras avances iniciales de dos o tres. Promoción inmediata. JSON conserva rutas y al paso extendido."
+        : state.variant === "volcan"
         ? "PGN extendido El suelo es lava: erupción cada " + (state.volcano?.every || 3) + " movimientos, alternando mitad baja (filas 1-4) y alta (5-8). Erupciones 1-6 filas 4-5; 7-12 filas 3-6; 13-18 filas 2-7; desde la 19 todo el tablero. Casillas derretidas bloquean el paso, salvo saltos de caballo. Rey en lava pierde. Sin movimientos y sin jaque: sustitución y movimiento obligatorio de la nueva pieza; en jaque no hay sustitución (mate); si tampoco se puede, tablas. Terreno, erupciones y reservas exactas en JSON."
         : state.variant === "renacer"
           ? "PGN extendido Renacer: capturas a la reserva del propietario. Colocar consume el turno, en casilla vacía, sin jaque. Peones: blancas filas 2-6; negras 3-7. Promociones conservadas. Piezas colocadas no restituyen enroque. Usar JSON para conservar reservas exactas."
@@ -418,6 +430,8 @@ export function pgn(state, names = { w: "Blancas", b: "Negras" }) {
       h.kind === "remove"
         ? `{ Retira ${h.captured.toUpperCase()} en ${h.to}. FEN: ${h.fen} } `
         : h.san + " ";
+    if (state.variant === "mojado")
+      txt += `{ Ruta: ${h.trail.join("-")}; freno: ${h.stop}; FEN: ${h.fen}${h.wetAfter.ep ? "; al paso: " + h.wetAfter.ep.target + " retira " + h.wetAfter.ep.pawn : ""} } `;
     if (state.variant === "correlativo") txt += `{ ${h.step}/${h.budget} } `;
     if (state.variant === "volcan") {
       if (h.kind === "swap")
