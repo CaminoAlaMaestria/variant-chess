@@ -47,6 +47,8 @@ import {
   Flame,
   Mountain,
   ShieldAlert,
+  Droplets,
+  Waves,
 } from "lucide-react";
 import {
   initial,
@@ -78,6 +80,7 @@ import {
   meltCandidates,
   rewindVolcano,
 } from "./volcano.js";
+import { freshWet, rewindWet } from "./wet.js";
 import "./style.css";
 import { engineMove, engineEvaluate } from "./engine/client.js";
 import { browserSession, writeSession, SESSION_KEY } from "./session.js";
@@ -133,6 +136,15 @@ const VARIANTS = {
     role: "El estratega de la última frontera",
     image: "/ignis.png",
     accent: "lava",
+  },
+  mojado: {
+    name: "Suelo mojado",
+    tag: "CADA MOVIMIENTO DEJA UNA ESTELA.",
+    desc: "Domina el impulso. Anticipa el final.",
+    character: "NAIA",
+    role: "La estratega de las corrientes",
+    image: "/naia.png",
+    accent: "rain",
   },
 };
 const loadedSession = browserSession();
@@ -263,6 +275,7 @@ function App() {
     [removal, setRemoval] = useState(null),
     [swapPiece, setSwapPiece] = useState(null),
     [showDanger, setShowDanger] = useState(false),
+    [hoverSquare, setHoverSquare] = useState(null),
     [lavaEvery, setLavaEvery] = useState(saved?.game?.volcano?.every || 3);
   const diceTimer = useRef(null);
   const frozen = !!lavaFx || !!swapFx,
@@ -280,6 +293,7 @@ function App() {
   const isDice = game.variant === "azar";
   const isRenacer = game.variant === "renacer";
   const isVolcan = game.variant === "volcan";
+  const isWet = game.variant === "mojado";
   const mustSwap = isVolcan && moves.some((m) => m.kind === "swap");
   const waitingRoll = isDice && game.dice?.phase === "roll";
   const isRemoving = isDice && game.dice?.phase === "remove";
@@ -296,6 +310,9 @@ function App() {
   const displayedVolcano = isAnalysis
     ? reviewed?.volcanoAfter || freshVolcano()
     : game.volcano || freshVolcano();
+  const displayedWet = isAnalysis
+    ? reviewed?.wetAfter || freshWet()
+    : game.wet || freshWet();
   const molten = new Set(displayedVolcano.melted);
   const untilLava = movesUntilEruption(game.turnIndex, game.volcano?.every);
   const dangerSquares =
@@ -309,6 +326,13 @@ function App() {
           (m) => m.from === selection && (!mustSwap || m.piece === swapPiece),
         )
       : [];
+  const slidePreview = isWet
+    ? selection && !isAnalysis
+      ? selectedMoves.find((m) => m.to === hoverSquare) ||
+        (selectedMoves.length === 1 ? selectedMoves[0] : null)
+      : last
+    : null;
+  const slideTrail = new Set(slidePreview?.trail?.slice(1, -1) || []);
   const counts = {
     w: board.filter((p) => p?.color === "w").length,
     b: board.filter((p) => p?.color === "b").length,
@@ -418,6 +442,7 @@ function App() {
     if (!valid) return;
     setSelection(null);
     setSwapPiece(null);
+    setHoverSquare(null);
     setHint(null);
     setPromotion(null);
     setRemoval(null);
@@ -559,6 +584,7 @@ function App() {
     setStarted(false);
     setSelection(null);
     setSwapPiece(null);
+    setHoverSquare(null);
     setHint(null);
     setEngineError("");
     setBusy(false);
@@ -650,6 +676,16 @@ function App() {
       }
     }
     if (
+      isWet &&
+      selection &&
+      selectedMoves.some((m) => m.via === s && m.to !== s)
+    ) {
+      notify(
+        "El suelo te lleva más lejos. Elige uno de los destinos finales marcados.",
+      );
+      return;
+    }
+    if (
       selection?.startsWith("@") &&
       (!board[index(s)] || board[index(s)].color !== game.turn)
     ) {
@@ -677,6 +713,7 @@ function App() {
     let g;
     if (isDice) g = rewindDice(game, length);
     else if (isVolcan) g = rewindVolcano(game, length);
+    else if (isWet) g = rewindWet(game, length);
     else {
       g = initial(game.variant);
       for (let i = 0; i < length; i++) {
@@ -687,6 +724,7 @@ function App() {
     setGame(g);
     setSelection(null);
     setSwapPiece(null);
+    setHoverSquare(null);
     setHint(null);
     setModal(null);
     notify("Jugada deshecha. El reloj no se reinicia.");
@@ -762,7 +800,7 @@ function App() {
     setEvalBusy(true);
     setAnalysisScore(null);
     try {
-      const data = await engineEvaluate(displayFen, game.variant, isVolcan
+      const data = await engineEvaluate(displayFen, game.variant, isVolcan || isWet
             ? {
                 state: {
                   ...game,
@@ -772,6 +810,7 @@ function App() {
                   remaining: 1,
                   reserves: displayedReserves,
                   volcano: displayedVolcano,
+                  wet: displayedWet,
                   result:
                     review === game.history.length - 1 ? game.result : null,
                   history: [],
@@ -871,7 +910,9 @@ function App() {
               ? "cyan-mode"
               : isVolcan
                 ? "lava-mode"
-                : "")
+                : isWet
+                  ? "rain-mode"
+                  : "")
       }
       style={{
         "--light-square": THEMES[theme].light,
@@ -934,7 +975,7 @@ function App() {
           </span>
           <div>
             Más allá de lo clásico
-            <small>Cinco variantes. Infinitas ideas.</small>
+            <small>Seis variantes. Infinitas ideas.</small>
           </div>
         </div>
         <div className="sidebar-bottom">
@@ -959,7 +1000,7 @@ function App() {
           </div>
           <div className="sidebar-footer">
             <span>EVOLUTION CHESS LAB</span>
-            <span>v0.4 BETA</span>
+            <span>v0.5 BETA</span>
           </div>
         </div>
       </aside>
@@ -1166,6 +1207,23 @@ function App() {
                 {isVolcan ? <Check size={14} /> : <ArrowUpRight size={16} />}
               </span>
             </button>
+            <button
+              className={"variant-card wet-variant " + (isWet ? "chosen" : "")}
+              onClick={() => !isWet && requestReset("mojado")}
+            >
+              <span className="variant-symbol">
+                <Droplets size={24} strokeWidth={1.6} />
+              </span>
+              <div>
+                <div className="variant-name">
+                  Suelo mojado <span className="variant-badge">NUEVA</span>
+                </div>
+                <p>Domina el impulso.</p>
+              </div>
+              <span className="variant-check">
+                {isWet ? <Check size={14} /> : <ArrowUpRight size={16} />}
+              </span>
+            </button>
           </div>
           <div className="game-layout">
             <section className="board-column">
@@ -1267,6 +1325,13 @@ function App() {
                           !isAnalysis
                             ? " swap-source"
                             : "") +
+                          (isWet && slideTrail.has(s) ? " slide-trail" : "") +
+                          (isWet && allowed && !isAnalysis
+                            ? " slide-destination"
+                            : "") +
+                          (isWet && slidePreview?.to === s
+                            ? " slide-finish"
+                            : "") +
                           (isLast ? " last-move" : "") +
                           (isRenacer &&
                           selection?.startsWith("@") &&
@@ -1280,13 +1345,22 @@ function App() {
                             : "") +
                           (hint?.to === s ? " hinted" : "")
                         }
+                        onMouseEnter={() => isWet && setHoverSquare(s)}
+                        onFocus={() => isWet && setHoverSquare(s)}
+                        data-slide-destination={
+                          isWet && allowed && !isAnalysis ? "true" : undefined
+                        }
                         data-molten={
                           isVolcan && molten.has(s) ? "true" : undefined
                         }
                         title={
                           isVolcan && molten.has(s)
                             ? `${s}: casilla derretida, paso bloqueado`
-                            : undefined
+                            : isWet && allowed
+                              ? selectedMoves.find((m) => m.to === s)?.castle
+                                ? `Enroque: rey ${s}, torre ${selectedMoves.find((m) => m.to === s).rookTo}`
+                                : `Destino final: ${s}`
+                              : undefined
                         }
                         onClick={() => chooseSquare(s)}
                         onDragOver={(e) => e.preventDefault()}
@@ -1347,7 +1421,15 @@ function App() {
                           />
                         )}
                         {allowed && showHints && !isAnalysis && (
-                          <span className={p ? "capture-ring" : "move-dot"} />
+                          <span
+                            className={
+                              isWet && p?.color === game.turn
+                                ? "castle-marker"
+                                : p
+                                  ? "capture-ring"
+                                  : "move-dot"
+                            }
+                          />
                         )}
                       </button>
                     );
@@ -1553,7 +1635,9 @@ function App() {
                 }
               >
                 <span className="rule-icon">
-                  {isVolcan ? (
+                  {isWet ? (
+                    <Droplets size={18} />
+                  ) : isVolcan ? (
                     <Flame size={18} />
                   ) : isRenacer ? (
                     <RefreshCcw size={18} />
@@ -1566,7 +1650,15 @@ function App() {
                   )}
                 </span>
                 <p>
-                  {isVolcan ? (
+                  {isWet ? (
+                    <>
+                      <strong>
+                        Elige dónde terminar, no dónde empezar a resbalar.
+                      </strong>{" "}
+                      Las marcas son destinos finales. Capturar frena; una pieza
+                      propia o el borde detienen el recorrido.
+                    </>
+                  ) : isVolcan ? (
                     <>
                       <strong>
                         {last?.eruption
@@ -1639,6 +1731,16 @@ function App() {
               </div>
             </section>
             <aside className="game-panel">
+              {isWet && (
+                <WetPanel
+                  preview={slidePreview}
+                  selecting={!!selection && !isAnalysis}
+                  piece={selection ? board[index(selection)]?.type : null}
+                  ep={displayedWet.ep}
+                  reviewing={isAnalysis}
+                  onRules={() => setModal("rules-mojado")}
+                />
+              )}
               {isVolcan && (
                 <VolcanoPanel
                   terrain={displayedVolcano}
@@ -1718,7 +1820,7 @@ function App() {
                   <section
                     className={
                       "panel-card setup-panel" +
-                      ((isDice || isRenacer || isVolcan) && started
+                      ((isDice || isRenacer || isVolcan || isWet) && started
                         ? " dice-setup-active"
                         : "")
                     }
@@ -1766,7 +1868,9 @@ function App() {
                                       ? "4"
                                       : isVolcan
                                         ? "5"
-                                        : "2"}
+                                        : isWet
+                                          ? "6"
+                                          : "2"}
                               </span>
                             </h3>
                             <p>{variant.role}</p>
@@ -1782,7 +1886,9 @@ function App() {
                                       ? game.volcano.melted.length
                                         ? "MOTOR DE TERRENO"
                                         : "STOCKFISH + TERRENO"
-                                      : "STOCKFISH + ADAPTADOR"}
+                                      : isWet
+                                        ? "MOTOR DE DESLIZAMIENTO"
+                                        : "STOCKFISH + ADAPTADOR"}
                             </div>
                           </div>
                           <img
@@ -2038,19 +2144,23 @@ function App() {
                     </div>
                     <div>
                       <strong>
-                        {isVolcan
-                          ? game.volcano.eruptions
-                          : isRenacer
-                            ? game.history.filter((h) => h.kind === "drop")
-                                .length
-                            : groups.length}
+                        {isWet
+                          ? game.history.filter((h) => h.slid).length
+                          : isVolcan
+                            ? game.volcano.eruptions
+                            : isRenacer
+                              ? game.history.filter((h) => h.kind === "drop")
+                                  .length
+                              : groups.length}
                       </strong>
                       <span>
-                        {isVolcan
-                          ? "Erupciones"
-                          : isRenacer
-                            ? "Recolocaciones"
-                            : "Turnos"}
+                        {isWet
+                          ? "Deslizamientos"
+                          : isVolcan
+                            ? "Erupciones"
+                            : isRenacer
+                              ? "Recolocaciones"
+                              : "Turnos"}
                       </span>
                     </div>
                   </div>
@@ -2146,13 +2256,15 @@ function App() {
                   <p className="analysis-warning">
                     {game.variant === "comecome"
                       ? "Evaluación real de Fairy-Stockfish con bloqueo configurado como tablas."
-                      : isVolcan
-                        ? "Evaluación orientativa del adaptador: respeta el terreno actual y las sustituciones. No predice qué casilla desaparecerá ni calcula todas las erupciones futuras. No es una puntuación nativa de Stockfish."
-                        : isRenacer
-                          ? "Evaluación clásica orientativa: no tiene en cuenta las reservas. Puede señalar un mate que una colocación legal evite. No es la ventaja exacta de Renacer."
-                          : isDice
-                            ? "Evaluación clásica orientativa. No calcula las probabilidades de futuras tiradas ni las extracciones del dado; no es la ventaja exacta de Azar."
-                            : "Evaluación orientativa de ajedrez clásico. Stockfish no entiende los turnos múltiples; no representa la ventaja real de esta variante."}
+                      : isWet
+                        ? "Evaluación experimental con movimientos y ataques de Suelo mojado, incluido el al paso extendido. No es Stockfish nativo ni una cifra de fuerza certificada."
+                        : isVolcan
+                          ? "Evaluación orientativa del adaptador: respeta el terreno actual y las sustituciones. No predice qué casilla desaparecerá ni calcula todas las erupciones futuras. No es una puntuación nativa de Stockfish."
+                          : isRenacer
+                            ? "Evaluación clásica orientativa: no tiene en cuenta las reservas. Puede señalar un mate que una colocación legal evite. No es la ventaja exacta de Renacer."
+                            : isDice
+                              ? "Evaluación clásica orientativa. No calcula las probabilidades de futuras tiradas ni las extracciones del dado; no es la ventaja exacta de Azar."
+                              : "Evaluación orientativa de ajedrez clásico. Stockfish no entiende los turnos múltiples; no representa la ventaja real de esta variante."}
                   </p>
                 </section>
               )}
@@ -2218,6 +2330,14 @@ function App() {
                                 </span>
                               )}
                               {m.san}
+                              {isWet && m.slid && (
+                                <span
+                                  className="history-slide"
+                                  title="Deslizamiento"
+                                >
+                                  <Waves size={12} />
+                                </span>
+                              )}
                               {isVolcan && m.eruption && (
                                 <span
                                   className="history-eruption"
@@ -2245,11 +2365,13 @@ function App() {
                       ? "Capturas obligatorias"
                       : isDice
                         ? "Tiradas y extracciones guardadas"
-                        : isVolcan
-                          ? "Erupciones y terreno guardados"
-                          : isRenacer
-                            ? "Capturas a tu propia reserva"
-                            : "Turnos progresivos"}
+                        : isWet
+                          ? "Rutas y al paso guardados"
+                          : isVolcan
+                            ? "Erupciones y terreno guardados"
+                            : isRenacer
+                              ? "Capturas a tu propia reserva"
+                              : "Turnos progresivos"}
                   </span>
                   <button
                     disabled={!game.history.length}
@@ -2631,6 +2753,7 @@ function App() {
   );
 }
 function Rules({ variant }) {
+  if (variant === "mojado") return <WetRules />;
   if (variant === "volcan") return <VolcanoRules />;
   if (variant === "renacer") return <RenacerRules />;
   if (variant === "azar") return <DiceRules />;
@@ -3443,6 +3566,205 @@ function VolcanoRules() {
         Deshacer y revisar restauran los eventos registrados; si vuelves a
         jugar, la nueva erupción se sortea de nuevo. PGN extendido con
         comentarios de lava; JSON guarda el estado completo.
+      </p>
+    </div>
+  );
+}
+
+const WET_STOPS = {
+  capture: "La captura detiene el movimiento",
+  ally: "Freno ante una pieza propia",
+  edge: "Freno en el borde del tablero",
+  "pawn-blocked": "El peón no captura de frente",
+  promotion: "Promoción inmediata",
+  extra: "Una casilla extra completada",
+  castle: "Rey y torre, una casilla extra",
+};
+function WetPanel({ preview, selecting, piece, ep, reviewing, onRules }) {
+  return (
+    <section className="panel-card wet-panel">
+      <div className="panel-heading">
+        <h2>
+          <Droplets size={17} /> Controla la inercia
+        </h2>
+        <button
+          className="icon-button"
+          title="Reglas de Suelo mojado"
+          onClick={onRules}
+        >
+          <CircleHelp size={15} />
+        </button>
+      </div>
+      <div className="wet-scene">
+        <svg viewBox="0 0 180 100" aria-hidden="true">
+          <defs>
+            <linearGradient id="rainBoard" x1="0" y1="0" x2="1" y2="1">
+              <stop stopColor="#3d7898" />
+              <stop offset="1" stopColor="#142c3e" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M12 60 85 25 166 60 93 95Z"
+            fill="url(#rainBoard)"
+            stroke="#79b6db"
+            strokeWidth=".8"
+          />
+          <g stroke="#87b8d1" opacity=".35" strokeWidth=".6">
+            <path d="m30 51 80 36m-61-45 80 36m-62-45 80 36M32 69l73-35M52 78l73-35M72 87l73-35" />
+          </g>
+          <ellipse
+            cx="90"
+            cy="60"
+            rx="22"
+            ry="10"
+            fill="none"
+            stroke="#8ac9f5"
+            opacity=".4"
+          />
+          <path
+            d="M48 67 91 47 134 66m-10-9 10 9-16 2"
+            fill="none"
+            stroke="#b4e3ff"
+            strokeWidth="2"
+          />
+          <g fill="#a8dbfa">
+            <circle cx="48" cy="67" r="3" />
+            <circle cx="91" cy="47" r="3" />
+          </g>
+          <g stroke="#70b9e7" opacity=".6">
+            <path d="m41 6-6 13m35-14-5 11m55-8-6 13m37 0-6 12m-88-5-5 12" />
+          </g>
+        </svg>
+        <div>
+          <span className="wet-kicker">NO TODO ACABA DONDE APUNTAS</span>
+          <h3>Piensa en el final.</h3>
+          <p>El suelo añade el impulso.</p>
+        </div>
+      </div>
+      <div className="wet-principles">
+        <div>
+          <strong>+1</strong>
+          <span>PEÓN · REY · CABALLO</span>
+        </div>
+        <div>
+          <strong>↗</strong>
+          <span>LAS LÍNEAS, HASTA EL FINAL</span>
+        </div>
+      </div>
+      <div className="slide-preview" aria-live="polite">
+        <span className="wet-kicker">
+          {reviewing
+            ? "RUTA EN REVISIÓN"
+            : selecting
+              ? "PREVISIÓN DEL MOVIMIENTO"
+              : preview
+                ? "ÚLTIMO RECORRIDO"
+                : "DESTINOS FINALES"}
+        </span>
+        {preview ? (
+          <>
+            <div className="slide-route">
+              <b>{preview.from}</b>
+              <ArrowRight size={14} />
+              <b className={preview.slid ? "via-cell" : "final-cell"}>
+                {preview.via}
+              </b>
+              {preview.slid && (
+                <>
+                  <Waves size={16} />
+                  <b className="final-cell">{preview.to}</b>
+                </>
+              )}
+            </div>
+            <p>
+              {WET_STOPS[preview.stop]}
+              {preview.castle
+                ? ` · torre ${preview.rookFrom} → ${preview.rookTo}`
+                : ""}
+            </p>
+          </>
+        ) : (
+          <p>
+            {selecting
+              ? piece === "n"
+                ? "El caballo prolonga el tramo largo de su L. Señala un destino marcado para ver su ruta."
+                : "Señala un destino marcado para ver la ruta. Pulsa el destino final para mover."
+              : "Selecciona una pieza: las marcas muestran dónde terminará tras resbalar."}
+          </p>
+        )}
+      </div>
+      {ep && (
+        <div className="wet-ep">
+          <ShieldCheck size={15} />
+          <p>
+            Ventana de al paso <strong>{ep.target}</strong>
+            <small>
+              Peón en {ep.pawn} · requiere un rival contiguo · solo esta
+              respuesta
+            </small>
+          </p>
+        </div>
+      )}
+      <div className="wet-footnote">
+        <Waves size={14} />
+        <span>Capturar frena. El rey siempre a salvo.</span>
+      </div>
+    </section>
+  );
+}
+function WetRules() {
+  const sections = [
+    [
+      "Una casilla extra.",
+      "Después del movimiento normal, peones y rey siguen una casilla en la misma dirección. El caballo prolonga el tramo largo de su L: e4 → f6 → f7, o e4 → g5 → h5. El caballo salta hasta su primera casilla y después resbala; no puede saltar otra pieza en ese tramo extra.",
+    ],
+    [
+      "Las líneas llegan hasta el final.",
+      "Torres, alfiles y damas siguen por su fila, columna o diagonal hasta el borde o hasta encontrar una pieza. No puedes detenerlas voluntariamente en una casilla vacía intermedia. Las marcas del tablero muestran los destinos finales; pulsa o arrastra hasta ellos.",
+    ],
+    [
+      "Choques y capturas.",
+      "El rebote deja la pieza en la última casilla libre anterior al obstáculo propio o al borde: no empuja ni retrocede otra casilla. La primera captura detiene el movimiento, tanto en la casilla inicial como durante el deslizamiento. No se capturan varias piezas. El peón nunca captura de frente: una rival frontal bloquea y frena igual que una propia.",
+    ],
+    [
+      "Rey seguro durante todo el recorrido.",
+      "El jaque se calcula con los movimientos de esta variante: incluye el salto extendido del caballo y el alcance ampliado del rey. El rey no puede atravesar ni terminar en una casilla atacada. Nunca se captura al rey. Mate y ahogado consideran todos los deslizamientos legales.",
+    ],
+    [
+      "Enroque con doble resbalón.",
+      "El rey y la torre avanzan una casilla extra en sus respectivas direcciones. Blancas: corto, rey h1 y torre e1; largo, rey b1 y torre e1. Negras igual en la fila 8. Se conservan los derechos, corredor libre y seguridad de todas las casillas recorridas por el rey. Para el corto, selecciona el rey y después la casilla de su torre, marcada como destino de enroque.",
+    ],
+    [
+      "Peones: promoción y al paso.",
+      "La promoción es inmediata al alcanzar la última fila, sin resbalar más. Desde la fila inicial, el peón puede avanzar dos o tres casillas en total. En ambos casos admite al paso en la respuesta inmediata: un peón rival contiguo a su posición final puede capturarlo aterrizando justo detrás. Capturar al paso también frena, sin casilla extra. Si el choque reduce el avance a una sola casilla, no hay al paso.",
+    ],
+  ];
+  return (
+    <div className="rules-content wet-rules">
+      {sections.map(([title, text], i) => (
+        <div key={title}>
+          <span>{String(i + 1).padStart(2, "0")}</span>
+          <section>
+            <h3>{title}</h3>
+            <p>{text}</p>
+          </section>
+        </div>
+      ))}
+      <div className="rules-note">
+        <Cpu size={18} />
+        <p>
+          NAIA usa un buscador experimental que conoce deslizamientos, ataques y
+          al paso extendido. No es soporte nativo de Stockfish y no tiene Elo
+          certificado. La evaluación requiere el estado completo, no solo la
+          FEN.
+        </p>
+      </div>
+      <p className="rules-small">
+        Las demás convenciones son clásicas: alternancia, mate, ahogado, triple
+        repetición, 50 movimientos y criterio clásico de material insuficiente.
+        Deshacer no devuelve tiempo. PGN extendido: ~ indica el tramo de
+        deslizamiento; JSON conserva rutas y derechos al paso exactos. No se
+        incluye importación de partidas.
       </p>
     </div>
   );

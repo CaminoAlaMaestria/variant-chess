@@ -12,6 +12,7 @@ import {
   RESERVE_TYPES,
 } from "../rules.js";
 import { meltCandidates, volcanoInCheck, volcanoOutcome } from "../volcano.js";
+import { wetInCheck, wetOutcome } from "../wet.js";
 import { validSessionGame } from "../session.js";
 
 const VARIANTS_INI =
@@ -85,6 +86,7 @@ function evaluate(s, color) {
     }
     if (volcanoInCheck(s)) v += s.turn === color ? -25 : 25;
   }
+  if (s.variant === "mojado" && wetInCheck(s)) v += s.turn === color ? -35 : 35;
   return v;
 }
 
@@ -253,18 +255,24 @@ function volcanoChoice(state, hint, level) {
 async function move({ state, level = 2 }) {
   if (
     !state ||
-    !["comecome", "correlativo", "azar", "renacer", "volcan"].includes(state.variant) ||
+    !["comecome", "correlativo", "azar", "renacer", "volcan", "mojado"].includes(state.variant) ||
     typeof state.fen !== "string" ||
     !Number.isInteger(level) ||
     level < 1 ||
     level > 4
   )
     throw new Error("Posición no válida");
-  if (state.variant === "volcan" && !validSessionGame({ ...state, history: [], positions: [] }))
+  if (["volcan", "mojado"].includes(state.variant) && !validSessionGame({ ...state, history: [], positions: [] }))
     throw new Error("Terreno o piezas eliminadas no válidos");
   const legal = legalMoves(state),
     moves = legal.map(uci);
   if (!moves.length) return { move: null };
+  if (state.variant === "mojado")
+    return {
+      move: volcanoChoice({ ...state, history: [], positions: [] }, null, level),
+      engine: "Buscador de deslizamiento Suelo mojado",
+      experimental: true,
+    };
   if (state.variant === "volcan") {
     let hint = null;
     if (!state.volcano.melted.length && legal.every((m) => m.kind !== "swap"))
@@ -331,18 +339,18 @@ self.onmessage = async ({ data }) => {
     if (type === "move") result = await move(payload);
     else {
       const { fen, variant, state } = payload;
-      if (typeof fen !== "string" || !["comecome", "correlativo", "azar", "renacer", "volcan"].includes(variant))
+      if (typeof fen !== "string" || !["comecome", "correlativo", "azar", "renacer", "volcan", "mojado"].includes(variant))
         throw new Error("Posición no válida");
-      if (variant === "volcan") {
+      if (["volcan", "mojado"].includes(variant)) {
         if (!state || state.fen !== fen || state.variant !== variant || !validSessionGame({ ...state, history: [], positions: [] }))
           throw new Error("Falta el terreno válido para analizar esta posición");
-        const outcome = volcanoOutcome({ ...state, result: null });
+        const outcome = (variant === "mojado" ? wetOutcome : volcanoOutcome)({ ...state, result: null });
         const assessed = { ...state, result: outcome, history: [], positions: [] };
         result = {
           score: { type: "cp", value: Math.round(evaluate(assessed, state.turn)) },
           move: outcome ? null : volcanoChoice(assessed, null, 2),
           outcome,
-          evaluationKind: "terrain",
+          evaluationKind: variant === "mojado" ? "sliding" : "terrain",
           experimental: true,
         };
       } else result = await engine({ fen, variant, analysis: true });

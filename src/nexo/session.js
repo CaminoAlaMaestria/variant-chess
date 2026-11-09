@@ -1,7 +1,14 @@
 import { validateFen } from "chess.js";
 import { boardFromFen, RESERVE_TYPES } from "./rules.js";
 export const SESSION_KEY = "nexo-session-v1";
-const variants = ["comecome", "correlativo", "azar", "renacer", "volcan"];
+const variants = [
+  "comecome",
+  "correlativo",
+  "azar",
+  "renacer",
+  "volcan",
+  "mojado",
+];
 function validFen(fen, variant) {
   if (
     typeof fen !== "string" ||
@@ -84,6 +91,45 @@ export function validSessionGame(g) {
       g.history.some(
         (h) =>
           !validReserve(h.reservesBefore) || !validReserve(h.reservesAfter),
+      )
+    )
+      return false;
+  }
+  if (g.variant === "mojado") {
+    const validWet = (w, fen) => {
+      if (!w || !Object.hasOwn(w, "ep")) return false;
+      if (w.ep === null) return true;
+      const e = w.ep;
+      if (
+        !e ||
+        !/^[a-h][2-7]$/.test(e.target) ||
+        !/^[a-h][3-6]$/.test(e.pawn) ||
+        !["w", "b"].includes(e.color)
+      )
+        return false;
+      if (
+        e.color === fen.split(" ")[1] ||
+        e.target[0] !== e.pawn[0] ||
+        Number(e.target[1]) !== Number(e.pawn[1]) + (e.color === "w" ? -1 : 1)
+      )
+        return false;
+      const board = boardFromFen(fen),
+        at = (s) => (8 - Number(s[1])) * 8 + "abcdefgh".indexOf(s[0]);
+      return (
+        !board[at(e.target)] &&
+        board[at(e.pawn)]?.type === "p" &&
+        board[at(e.pawn)].color === e.color
+      );
+    };
+    if (
+      !validWet(g.wet, g.fen) ||
+      g.history.some(
+        (h) =>
+          !validWet(h.wetBefore, h.before) ||
+          !validWet(h.wetAfter, h.fen) ||
+          !Array.isArray(h.trail) ||
+          h.trail.some((s) => !/^[a-h][1-8]$/.test(s)) ||
+          !/^[a-h][1-8]$/.test(h.via),
       )
     )
       return false;
