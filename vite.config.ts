@@ -38,7 +38,8 @@ export default defineConfig({
           runtimeCaching: [
             {
               urlPattern: ({ request, url }) =>
-                request.mode === "navigate" && !url.pathname.startsWith("/~oauth"),
+                (request.mode === "navigate" || (request.destination === "" && url.pathname === "/")) &&
+                !url.pathname.startsWith("/~oauth"),
               handler: "NetworkFirst",
               options: { cacheName: "ec-pages", networkTimeoutSeconds: 4 },
             },
