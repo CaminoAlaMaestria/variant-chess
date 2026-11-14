@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ClientOnly } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
+import OfflineBadge from "../nexo/OfflineBadge";
 
 const NexoGame = lazy(() => import("../nexo/Game.jsx"));
 
@@ -42,6 +43,7 @@ function Index() {
       <Suspense fallback={<Boot />}>
         <NexoGame />
       </Suspense>
+      <OfflineBadge />
     </ClientOnly>
   );
 }
