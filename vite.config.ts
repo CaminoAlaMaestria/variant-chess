@@ -5,11 +5,47 @@
 //     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
     server: { entry: "server" },
+  },
+  vite: {
+    plugins: [
+      VitePWA({
+        registerType: "autoUpdate",
+        injectRegister: null,
+        devOptions: { enabled: false },
+        filename: "sw.js",
+        outDir: "dist/client",
+        manifest: {
+          name: "Evolution Chess",
+          short_name: "Evolution Chess",
+          lang: "es",
+          start_url: "/",
+          scope: "/",
+          display: "standalone",
+          background_color: "#111512",
+          theme_color: "#111512",
+          icons: [{ src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" }],
+        },
+        workbox: {
+          globPatterns: ["**/*.{js,css,wasm,png,svg,ttf,woff2,ini,txt}"],
+          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+          cleanupOutdatedCaches: true,
+          navigateFallback: null,
+          runtimeCaching: [
+            {
+              urlPattern: ({ request, url }) =>
+                (request.mode === "navigate" || (request.destination === "" && url.pathname === "/")) &&
+                !url.pathname.startsWith("/~oauth"),
+              handler: "NetworkFirst",
+              options: { cacheName: "ec-pages", networkTimeoutSeconds: 4 },
+            },
+          ],
+        },
+      }),
+    ],
   },
 });
