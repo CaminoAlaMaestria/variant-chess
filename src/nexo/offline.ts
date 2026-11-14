@@ -18,7 +18,7 @@ function refused(): boolean {
   if (!import.meta.env.PROD) return true;
   if (window.self !== window.top) return true;
   const h = window.location.hostname.toLowerCase();
-  const first = h.split(".")[0];
+  const first = h.split(".")[0] ?? "";
   if (/\.(lovable\.app|gpt-eng\.com|gptengineer\.run)$/.test(h)) {
     if (/^(?:id-preview|preview)(?:-[a-z0-9]+)?--.+$/.test(first)) return true;
     if (first === `project--${PROJECT_ID}-dev`) return true;
