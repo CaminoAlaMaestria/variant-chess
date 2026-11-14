@@ -13,7 +13,7 @@ export default function OfflineBadge() {
   const text =
     s === "ready" ? "Disponible sin conexión" : s === "preparing" ? "Preparando modo sin conexión…" : `Sin conexión no disponible (${d})`;
   return (
-    <div role="status" className="fixed bottom-2 left-2 z-50 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-card-foreground shadow">
+    <div role="status" className="fixed bottom-2 right-2 z-50 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-card-foreground shadow">
       <span>{text}</span>
       {s === "error" && (
         <button className="rounded bg-primary px-2 py-0.5 text-primary-foreground" onClick={() => prepareOffline()}>
