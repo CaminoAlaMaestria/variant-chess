@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ClientOnly } from "@tanstack/react-router";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
+import Cinematic from "../nexo/Cinematic.jsx";
+import { INTRO } from "../nexo/scenes";
 import OfflineBadge from "../nexo/OfflineBadge";
 
 const NexoGame = lazy(() => import("../nexo/Game.jsx"));
@@ -38,11 +40,17 @@ function Boot() {
 }
 
 function Index() {
+  // Shown on every document load; state lives here so tab switches, rotation or variant changes never replay it.
+  const [introDone, setIntroDone] = useState(false);
   return (
     <ClientOnly fallback={<Boot />}>
-      <Suspense fallback={<Boot />}>
-        <NexoGame />
-      </Suspense>
+      {introDone ? (
+        <Suspense fallback={<Boot />}>
+          <NexoGame />
+        </Suspense>
+      ) : (
+        <Cinematic {...INTRO} onDone={() => setIntroDone(true)} />
+      )}
       <OfflineBadge />
     </ClientOnly>
   );

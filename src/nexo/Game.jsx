@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import Cinematic from "./Cinematic.jsx";
+import { INTRO, NYX_SCENE, NYX_TEXT } from "./scenes";
+import { loadCampaign, saveCampaign, isNyxWin, recruitNyx } from "./campaign.js";
 import {
   Swords,
   Activity,
@@ -278,7 +281,12 @@ function App() {
     [hoverSquare, setHoverSquare] = useState(null),
     [lavaEvery, setLavaEvery] = useState(saved?.game?.volcano?.every || 3);
   const diceTimer = useRef(null);
-  const frozen = !!lavaFx || !!swapFx,
+  // Video scenes ("intro" replay or "nyx" recruitment) freeze clocks, bot and input.
+  const [cinema, setCinema] = useState(null);
+  const [campaign, setCampaign] = useState(() => loadCampaign(window.localStorage));
+  const [campaignSaved, setCampaignSaved] = useState(true);
+  const prevResult = useRef(game.result);
+  const frozen = !!lavaFx || !!swapFx || !!cinema,
     busy = busyState || frozen,
     lavaUntil = useRef(0),
     lavaLen = useRef(game.history.length);
@@ -437,7 +445,7 @@ function App() {
   }, [game.history.length]);
   function execute(m) {
     const current = gameRef.current;
-    if (current.result || !started) return;
+    if (current.result || !started || cinema) return;
     const valid = legalMoves(current).find((x) => uci(x) === uci(m));
     if (!valid) return;
     setSelection(null);
@@ -451,7 +459,7 @@ function App() {
     setGame((g) => (g.result ? g : applyMove(g, valid)));
   }
   useEffect(() => {
-    if (!activeGame || mode !== "bot" || myTurn || engineError) return;
+    if (!activeGame || mode !== "bot" || myTurn || engineError || cinema) return;
     const id = ++requestId.current;
     const controller = new AbortController();
     setBusy(true);
@@ -501,7 +509,7 @@ function App() {
       setBusy(false);
       setRolling(false);
     };
-  }, [game, activeGame, mode, myTurn, level, retry]);
+  }, [game, activeGame, mode, myTurn, level, retry, cinema]);
   useEffect(() => {
     if (!isRunning || !time || engineError || frozen) return;
     let prev = Date.now();
@@ -530,8 +538,17 @@ function App() {
       setRemoval(null);
       clearTimeout(diceTimer.current);
       setRolling(false);
-      setModal("result");
+      const fresh = isNyxWin({ prevResult: prevResult.current, result: game.result, mode, variant: game.variant, human });
+      const rec = fresh ? recruitNyx(campaign) : null;
+      if (rec?.granted) {
+        // Save before showing the scene; keep the seal in memory even if storage fails.
+        setCampaignSaved(saveCampaign(window.localStorage, rec.campaign));
+        setCampaign(rec.campaign);
+        setModal(null);
+        setCinema("nyx");
+      } else setModal("result");
     }
+    prevResult.current = game.result;
   }, [game.result]);
   useEffect(() => {
     setAnalysisScore(null);
@@ -1096,6 +1113,9 @@ function App() {
             >
               <Plus size={17} /> Nueva partida
             </button>
+            <button className="text-button" onClick={() => setCinema("intro")}>
+              Ver introducción
+            </button>
           </div>
           <div className="variant-selector">
             <button
@@ -1114,6 +1134,11 @@ function App() {
                   Come-come <span className="variant-badge">ANTICHESS</span>
                 </div>
                 <p>Pierde todas tus piezas. Gana.</p>
+                {campaign.crew.includes("nyx") && (
+                  <span className="variant-badge">
+                    NYX reclutada · sellos {campaign.seals.length}/6
+                  </span>
+                )}
               </div>
               <span className="variant-check">
                 {game.variant === "comecome" ? (
@@ -2407,6 +2432,15 @@ function App() {
           {toast}
         </div>
       )}
+      {cinema && (
+        <Cinematic
+          {...(cinema === "nyx" ? NYX_SCENE : INTRO)}
+          onDone={() => {
+            if (cinema === "nyx") setModal("nyx");
+            setCinema(null);
+          }}
+        />
+      )}
       {(modal || promotion) && (
         <div
           className="modal-overlay"
@@ -2666,6 +2700,32 @@ function App() {
                   onClick={() => download("json")}
                 >
                   Descargar registro completo · JSON
+                </button>
+              </>
+            ) : modal === "nyx" ? (
+              <>
+                <span className="eyebrow">NUEVA TRIPULANTE</span>
+                <h2>Sello de NYX obtenido</h2>
+                <p>NYX se une a la tripulación.</p>
+                <p>{NYX_TEXT}</p>
+                {!campaignSaved && (
+                  <p role="alert">
+                    Aviso: el navegador no permitió guardar el progreso. El sello
+                    se perderá al cerrar el juego.
+                  </p>
+                )}
+                <button
+                  className="button primary full"
+                  onClick={() => reset("correlativo")}
+                >
+                  Ir al desafío de KAIRO
+                  <ArrowRight size={18} />
+                </button>
+                <button
+                  className="button secondary full"
+                  onClick={() => setModal("result")}
+                >
+                  Ver resultado de la partida
                 </button>
               </>
             ) : modal === "new" ? (

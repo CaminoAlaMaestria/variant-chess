@@ -37,6 +37,17 @@ export default defineConfig({
           navigateFallback: null,
           runtimeCaching: [
             {
+              // Videos: full 200 responses are cached (offline.ts fetches them whole);
+              // the player's Range requests are then answered with 206 slices from cache.
+              urlPattern: ({ url }) => url.pathname.startsWith("/videos/") && url.pathname.endsWith(".mp4"),
+              handler: "CacheFirst",
+              options: {
+                cacheName: "ec-videos-v1",
+                rangeRequests: true,
+                cacheableResponse: { statuses: [200], headers: { "content-type": "video/mp4" } },
+              },
+            },
+            {
               urlPattern: ({ request, url }) =>
                 (request.mode === "navigate" || (request.destination === "" && url.pathname === "/")) &&
                 !url.pathname.startsWith("/~oauth"),
