@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import Cinematic from "./Cinematic.jsx";
 import { INTRO, NYX_SCENE, NYX_TEXT } from "./scenes";
-import { loadCampaign, saveCampaign, isNyxWin, recruitNyx } from "./campaign.js";
+import { loadCampaign, saveCampaign, isNyxWin, recruitNyx, WORLD_1_ORDER } from "./campaign.js";
 import {
   Swords,
   Activity,
@@ -81,6 +81,8 @@ import {
   movesUntilEruption,
   WARNING_PLIES,
   meltCandidates,
+  volcanoVersion,
+  volcanoNextRecovery,
   rewindVolcano,
 } from "./volcano.js";
 import { freshWet, rewindWet } from "./wet.js";
@@ -131,15 +133,6 @@ const VARIANTS = {
     image: "/iris.png",
     accent: "cyan",
   },
-  volcan: {
-    name: "El suelo es lava",
-    tag: "EL TERRENO TAMBIÉN JUEGA.",
-    desc: "Sobrevive a un tablero que desaparece.",
-    character: "IGNIS",
-    role: "El estratega de la última frontera",
-    image: "/ignis.png",
-    accent: "lava",
-  },
   mojado: {
     name: "Suelo mojado",
     tag: "CADA MOVIMIENTO DEJA UNA ESTELA.",
@@ -148,6 +141,15 @@ const VARIANTS = {
     role: "La estratega de las corrientes",
     image: "/naia.png",
     accent: "rain",
+  },
+  volcan: {
+    name: "El suelo es lava",
+    tag: "EL TERRENO TAMBIÉN JUEGA.",
+    desc: "Sobrevive a un tablero que desaparece.",
+    character: "IGNIS",
+    role: "El estratega de la última frontera",
+    image: "/ignis.png",
+    accent: "lava",
   },
 };
 const loadedSession = browserSession();
@@ -625,7 +627,6 @@ function App() {
     }
     setClocks({ w: time * 60, b: time * 60 });
     setStarted(true);
-    setFlipped(mode === "bot" && human === "b");
     setEngineError("");
     notify(
       mode === "local"
@@ -1006,9 +1007,6 @@ function App() {
               <br />
               de pensar el ajedrez.
             </p>
-            <button onClick={() => setModal("rules")}>
-              Explorar las variantes <ArrowRight size={15} />
-            </button>
           </div>
           <div className="local-status">
             <span className="status-dot" />
@@ -1214,6 +1212,23 @@ function App() {
               </span>
             </button>
             <button
+              className={"variant-card wet-variant " + (isWet ? "chosen" : "")}
+              onClick={() => !isWet && requestReset("mojado")}
+            >
+              <span className="variant-symbol">
+                <Droplets size={24} strokeWidth={1.6} />
+              </span>
+              <div>
+                <div className="variant-name">
+                  Suelo mojado <span className="variant-badge">NUEVA</span>
+                </div>
+                <p>Domina el impulso.</p>
+              </div>
+              <span className="variant-check">
+                {isWet ? <Check size={14} /> : <ArrowUpRight size={16} />}
+              </span>
+            </button>
+            <button
               className={
                 "variant-card volcano-variant " + (isVolcan ? "chosen" : "")
               }
@@ -1230,23 +1245,6 @@ function App() {
               </div>
               <span className="variant-check">
                 {isVolcan ? <Check size={14} /> : <ArrowUpRight size={16} />}
-              </span>
-            </button>
-            <button
-              className={"variant-card wet-variant " + (isWet ? "chosen" : "")}
-              onClick={() => !isWet && requestReset("mojado")}
-            >
-              <span className="variant-symbol">
-                <Droplets size={24} strokeWidth={1.6} />
-              </span>
-              <div>
-                <div className="variant-name">
-                  Suelo mojado <span className="variant-badge">NUEVA</span>
-                </div>
-                <p>Domina el impulso.</p>
-              </div>
-              <span className="variant-check">
-                {isWet ? <Check size={14} /> : <ArrowUpRight size={16} />}
               </span>
             </button>
           </div>
@@ -1746,13 +1744,6 @@ function App() {
                     </>
                   )}
                 </p>
-                <button
-                  title="Consultar reglas"
-                  aria-label="Consultar reglas"
-                  onClick={() => setModal("rules")}
-                >
-                  <CircleHelp size={17} />
-                </button>
               </div>
             </section>
             <aside className="game-panel">
@@ -1765,6 +1756,15 @@ function App() {
                   reviewing={isAnalysis}
                   onRules={() => setModal("rules-mojado")}
                 />
+              )}
+              {isVolcan && volcanoVersion(game.volcano) === 1 && (
+                <section className="panel-card legacy-rules" role="status">
+                  <strong>Partida con reglas anteriores</strong>
+                  <p>Esta partida sigue las reglas con las que empezó: sin límite de 10 lavas ni de 2 por fila.</p>
+                  <button className="button primary full" onClick={() => setModal("legacy")}>
+                    Iniciar partida con reglas nuevas
+                  </button>
+                </section>
               )}
               {isVolcan && (
                 <VolcanoPanel
@@ -1792,13 +1792,6 @@ function App() {
                     <h2>
                       <RefreshCcw size={17} /> Una segunda oportunidad
                     </h2>
-                    <button
-                      className="icon-button"
-                      title="Reglas de Renacer"
-                      onClick={() => setModal("rules-renacer")}
-                    >
-                      <CircleHelp size={15} />
-                    </button>
                   </div>
                   <p>
                     Lo que te capturan vuelve a <strong>tu reserva</strong>, no
@@ -1958,7 +1951,10 @@ function App() {
                               <button
                                 disabled={isRunning}
                                 className={human === "w" ? "active" : ""}
-                                onClick={() => setHuman("w")}
+                                onClick={() => {
+                                  setHuman("w");
+                                  if (mode === "bot") setFlipped(false);
+                                }}
                                 title="Jugar con blancas"
                               >
                                 <span className="white-token" />
@@ -1967,7 +1963,10 @@ function App() {
                               <button
                                 disabled={isRunning}
                                 className={human === "b" ? "active" : ""}
-                                onClick={() => setHuman("b")}
+                                onClick={() => {
+                                  setHuman("b");
+                                  if (mode === "bot") setFlipped(true);
+                                }}
                                 title="Jugar con negras"
                               >
                                 <span className="black-token" />
@@ -2407,14 +2406,6 @@ function App() {
                   </button>
                 </div>
               </section>
-              <button className="rules-link" onClick={() => setModal("rules")}>
-                <BookOpen size={18} />
-                <div>
-                  <strong>¿Cómo se juega a {variant.name}?</strong>
-                  <span>Un minuto para cambiar tu perspectiva.</span>
-                </div>
-                <ArrowUpRight size={17} />
-              </button>
             </aside>
           </div>
           <footer className="page-footer">
@@ -2589,6 +2580,29 @@ function App() {
                   Listo, a jugar <Check size={17} />
                 </button>
               </>
+            ) : modal === "legacy" ? (
+              <>
+                <span className="eyebrow">EL SUELO ES LAVA · REGLAS NUEVAS</span>
+                <h2>¿Empezar con las reglas nuevas?</h2>
+                <p>
+                  La partida actual se sustituirá. Si quieres conservarla,
+                  descárgala antes.
+                </p>
+                <div className="modal-actions">
+                  <button className="button" onClick={() => download("pgn")}>
+                    <Download size={16} /> Descargar PGN
+                  </button>
+                  <button className="button" onClick={() => download("json")}>
+                    <Download size={16} /> Descargar JSON
+                  </button>
+                </div>
+                <button className="button primary full" onClick={() => reset("volcan")}>
+                  Empezar con reglas nuevas
+                </button>
+                <button className="button full" onClick={() => setModal(null)}>
+                  Continuar la partida actual
+                </button>
+              </>
             ) : modal === "rules" || modal?.startsWith("rules-") ? (
               <>
                 <span className="eyebrow">EL MISMO TABLERO. OTRAS REGLAS.</span>
@@ -2599,7 +2613,7 @@ function App() {
                   }
                 </h2>
                 <div className="rule-tabs">
-                  {Object.entries(VARIANTS).map(([id, v]) => (
+                  {WORLD_1_ORDER.map((c) => [c.variant, VARIANTS[c.variant]]).map(([id, v]) => (
                     <button
                       key={id}
                       className={
@@ -2615,6 +2629,7 @@ function App() {
                   ))}
                 </div>
                 <Rules
+                  legacy={isVolcan && volcanoVersion(game.volcano) === 1}
                   variant={modal === "rules" ? game.variant : modal.slice(6)}
                 />
                 <button
@@ -2812,9 +2827,9 @@ function App() {
     </div>
   );
 }
-function Rules({ variant }) {
+function Rules({ variant, legacy }) {
   if (variant === "mojado") return <WetRules />;
-  if (variant === "volcan") return <VolcanoRules />;
+  if (variant === "volcan") return <VolcanoRules legacy={legacy} />;
   if (variant === "renacer") return <RenacerRules />;
   if (variant === "azar") return <DiceRules />;
   return (
@@ -2983,9 +2998,6 @@ function DiceTray({
         <h2>
           <Dices size={17} /> El dado del destino
         </h2>
-        <button className="dice-help" title="Reglas del dado" onClick={onRules}>
-          <CircleHelp size={15} />
-        </button>
       </div>
       <div className="dice-stage">
         <Die face={rolling ? null : face} rolling={rolling} />
@@ -3060,7 +3072,8 @@ function DiceTray({
           <button
             key={n}
             title={`${n}: ${e.title}`}
-            onClick={onRules}
+            type="button"
+            tabIndex={-1}
             className={Number(n) === face ? "active" : ""}
           >
             <span>{["", "⚀", "⚁", "⚂", "⚃", "⚄", "⚅"][n]}</span>
@@ -3347,13 +3360,12 @@ function sleep(ms, signal) {
   });
 }
 function zoneLabel(terrain) {
-  const half = volcanoHalf(terrain.eruptions),
-    rows = meltCandidates({ volcano: terrain })
+  const rows = meltCandidates({ volcano: terrain })
       .map((x) => Number(x[1]))
       .filter((r, i, a) => a.indexOf(r) === i)
       .sort();
   if (!rows.length) return "Sin casillas libres";
-  const which = half[0] === 1 ? "mitad baja" : "mitad alta";
+  const which = rows[0] <= 4 ? "mitad baja" : "mitad alta";
   return (
     (rows.length === 1 ? "Fila " + rows[0] : "Filas " + rows.join(", ")) +
     " (" +
@@ -3375,6 +3387,9 @@ function LavaWarning({ game, fx, swapFx }) {
     text = `¡Aviso! En ${n} jugadas se romperá una casilla: ${zoneLabel(game.volcano)}. Aparta tus piezas.`;
   else
     text = `Próxima erupción en ${n} jugadas · ${zoneLabel(game.volcano)}.`;
+  const rec = volcanoNextRecovery(game.volcano);
+  if (!fx && !swapFx && rec && n <= WARNING_PLIES)
+    text += ` La lava de ${rec} se enfriará y volverá a ser transitable.`;
   return (
     <div
       className={
@@ -3409,13 +3424,6 @@ function VolcanoPanel({
         <h2>
           <Flame size={17} /> Pulso de la lava
         </h2>
-        <button
-          className="icon-button"
-          title="Reglas de El suelo es lava"
-          onClick={onRules}
-        >
-          <CircleHelp size={15} />
-        </button>
       </div>
       <div className="volcano-scene">
         <svg viewBox="0 0 160 100" aria-hidden="true">
@@ -3536,9 +3544,26 @@ function VolcanoPanel({
     </section>
   );
 }
-function VolcanoRules() {
+function VolcanoRules({ legacy }) {
   return (
     <div className="rules-content volcano-rules">
+      <div>
+        <span>00</span>
+        <section>
+          <h3>Como mucho 10 lavas y 2 por fila.</h3>
+          <p>
+            Nunca hay más de 10 casillas con lava a la vez ni más de 2 en una
+            misma fila. Con 10 lavas, cada erupción recupera primero la más
+            antigua (vuelve vacía y transitable, sin resucitar piezas) y después
+            se derrite otra; la recuperada no puede volver a derretirse en esa
+            misma erupción. Si las filas de la fase están llenas, la lava busca
+            hacia el borde de la misma mitad y, si toda la mitad está llena, en
+            la otra.
+            {legacy &&
+              " Estás jugando una partida con reglas anteriores: en ella no se aplican estos límites."}
+          </p>
+        </section>
+      </div>
       <div>
         <span>01</span>
         <section>
@@ -3647,13 +3672,6 @@ function WetPanel({ preview, selecting, piece, ep, reviewing, onRules }) {
         <h2>
           <Droplets size={17} /> Controla la inercia
         </h2>
-        <button
-          className="icon-button"
-          title="Reglas de Suelo mojado"
-          onClick={onRules}
-        >
-          <CircleHelp size={15} />
-        </button>
       </div>
       <div className="wet-scene">
         <svg viewBox="0 0 180 100" aria-hidden="true">

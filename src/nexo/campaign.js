@@ -38,3 +38,13 @@ export function recruitNyx(c) {
     granted: true,
   };
 }
+
+// Canonical narrative order of the first world. Ids are stable storage keys.
+export const WORLD_1_ORDER = [
+  { character: "NYX", variant: "comecome" },
+  { character: "KAIRO", variant: "correlativo" },
+  { character: "VEGA", variant: "azar" },
+  { character: "IRIS", variant: "renacer" },
+  { character: "NAIA", variant: "mojado" },
+  { character: "IGNIS", variant: "volcan" },
+];

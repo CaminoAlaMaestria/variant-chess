@@ -36,7 +36,69 @@ const KNIGHT = [
   [2, 1],
 ];
 export function freshVolcano(every = ERUPTION_EVERY) {
-  return { melted: [], eruptions: 0, last: null, every: every === 5 ? 5 : 3 };
+  return {
+    melted: [],
+    eruptions: 0,
+    last: null,
+    every: every === 5 ? 5 : 3,
+    rulesVersion: VOLCANO_RULES_VERSION,
+  };
+}
+// Rules version 2: max 10 lavas, max 2 per rank, FIFO recovery of the oldest.
+// A save without rulesVersion was created before versioning existed: it is v1.
+export const VOLCANO_RULES_VERSION = 2;
+export const MAX_LAVA = 10;
+export const MAX_LAVA_PER_RANK = 2;
+export function volcanoVersion(v) {
+  if (!v || v.rulesVersion === undefined) return 1;
+  return v.rulesVersion === 1 || v.rulesVersion === 2 ? v.rulesVersion : null;
+}
+// Returns "" when the terrain respects its version, else a description.
+export function volcanoProblem(v) {
+  const version = volcanoVersion(v);
+  if (version === null) return "Versión de reglas desconocida.";
+  if (version === 1) return "";
+  if (v.melted.length > MAX_LAVA) return "Hay más de 10 casillas con lava.";
+  const per = {};
+  for (const sq of v.melted) per[sq[1]] = (per[sq[1]] || 0) + 1;
+  if (Object.values(per).some((n) => n > MAX_LAVA_PER_RANK))
+    return "Una fila tiene más de 2 casillas con lava.";
+  return "";
+}
+// Square that the next v2 eruption will recover (oldest lava), or null.
+export function volcanoNextRecovery(v) {
+  return volcanoVersion(v) === 2 && v.melted.length >= MAX_LAVA
+    ? v.melted[0]
+    : null;
+}
+// Expansion order of rows inside a half, from the centre to the edge.
+const HALF_ORDER = { low: [4, 3, 2, 1], high: [5, 6, 7, 8] };
+function candidatesV2(v) {
+  const recovered = volcanoNextRecovery(v),
+    melted = recovered ? v.melted.slice(1) : v.melted,
+    holes = new Set(melted),
+    per = {};
+  for (const sq of melted) per[sq[1]] = (per[sq[1]] || 0) + 1;
+  const rowSquares = (r) =>
+    (per[r] || 0) >= MAX_LAVA_PER_RANK
+      ? []
+      : "abcdefgh"
+          .split("")
+          .map((f) => f + r)
+          .filter((sq) => !holes.has(sq) && sq !== recovered);
+  const phase = volcanoRanks(v.eruptions),
+    first = v.eruptions % 2 === 0 ? "low" : "high",
+    halves = [first, first === "low" ? "high" : "low"];
+  for (const h of halves) {
+    const order = HALF_ORDER[h],
+      inPhase = order.filter((r) => phase.includes(r)).flatMap(rowSquares);
+    if (inPhase.length) return inPhase;
+    for (const r of order.filter((r) => !phase.includes(r))) {
+      const row = rowSquares(r);
+      if (row.length) return row;
+    }
+  }
+  return [];
 }
 export function volcanoPhase(eruptions) {
   return Math.min(3, Math.floor(eruptions / 6));
@@ -66,6 +128,7 @@ export function volcanoRanks(eruptions) {
   ][volcanoPhase(eruptions)];
 }
 export function meltCandidates(state) {
+  if (volcanoVersion(state.volcano) === 2) return candidatesV2(state.volcano);
   const rows = volcanoRanks(state.volcano.eruptions),
     half = volcanoHalf(state.volcano.eruptions),
     holes = new Set(state.volcano.melted),
@@ -437,7 +500,10 @@ export function applyVolcanoAction(
   let eruption = null,
     result = null;
   if (eruptsAfter(state.turnIndex, state.volcano.every)) {
-    const candidates = meltCandidates(state);
+    const candidates = meltCandidates(state),
+      recovered = volcanoNextRecovery(state.volcano);
+    // Recovery and new lava are one transition: the square returns empty.
+    if (recovered) volcano.melted.shift();
     if (!fast) {
       if (
         forcedMelt !== undefined &&
@@ -455,6 +521,7 @@ export function applyVolcanoAction(
           piece: victim ? { ...victim } : null,
           number: volcano.eruptions + 1,
           phase: volcanoPhase(volcano.eruptions),
+          ...(recovered ? { recovered } : {}),
         };
         raw.board[i] = null;
         volcano.melted.push(at);
@@ -558,6 +625,8 @@ export function applyVolcanoAction(
 export function rewindVolcano(state, length) {
   let g = initial("volcan");
   g.volcano = freshVolcano(state.volcano?.every);
+  if (volcanoVersion(state.volcano) === 1) delete g.volcano.rulesVersion;
+  else g.volcano.rulesVersion = state.volcano.rulesVersion;
   for (const h of state.history.slice(0, length))
     g = applyVolcanoAction(g, h, false, h.eruption?.square ?? null);
   return g;

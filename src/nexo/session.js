@@ -1,5 +1,6 @@
 import { validateFen } from "chess.js";
 import { boardFromFen, RESERVE_TYPES } from "./rules.js";
+import { volcanoProblem, volcanoVersion } from "./volcano.js";
 export const SESSION_KEY = "nexo-session-v1";
 const variants = [
   "comecome",
@@ -144,7 +145,9 @@ export function validSessionGame(g) {
         !Number.isInteger(v.eruptions) ||
         v.eruptions < v.melted.length ||
         v.eruptions > 10000 ||
-        v.melted.some((s) => typeof s !== "string" || !/^[a-h][1-8]$/.test(s))
+        v.melted.some((s) => typeof s !== "string" || !/^[a-h][1-8]$/.test(s)) ||
+        volcanoProblem(v) ||
+        volcanoVersion(v) !== volcanoVersion(g.volcano)
       )
         return false;
       const board = boardFromFen(fen);
